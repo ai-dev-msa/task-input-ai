@@ -44,16 +44,6 @@ CREATE_ALOKASI_TOOL: dict[str, Any] = {
 }
 
 
-class HasilCI3(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    success: bool
-    type: str
-    message: str
-    database: str
-    data: dict[str, Any] = Field(default_factory=dict)
-
-
 class ResponseEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -61,6 +51,5 @@ class ResponseEnvelope(BaseModel):
     type: str
     function_name: str
     arguments: str
-    hasil_ci3: HasilCI3 | None = None
     raw_message: str
     user_id: str | None = None
