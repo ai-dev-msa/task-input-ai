@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from openai import OpenAI
@@ -20,7 +20,7 @@ def _env_float(name: str, default: float) -> float:
 
 @dataclass(frozen=True)
 class LLMConfig:
-    api_key: str
+    api_key: str = field(repr=False)
     model: str = "gpt-4o-mini"
     temperature: float = 0.0
     timeout: float = 30.0
@@ -35,7 +35,7 @@ class LLMConfig:
             )
         return cls(
             api_key=api_key,
-            model=os.environ.get("ALOKASI_MODEL", cls.model),
+            model=os.environ.get("ALOKASI_MODEL") or cls.model,
             temperature=_env_float("ALOKASI_TEMPERATURE", cls.temperature),
             timeout=_env_float("ALOKASI_TIMEOUT", cls.timeout),
             base_url=os.environ.get("OPENAI_BASE_URL") or None,

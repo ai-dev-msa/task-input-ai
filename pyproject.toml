@@ -7,7 +7,7 @@ name = "alokasi-agent"
 version = "0.1.0"
 description = "Natural-language allocation agent for create_alokasi"
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2.7,<3", "openai>=1.40"]
+dependencies = ["pydantic>=2.7,<3", "openai>=1.40,<4"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

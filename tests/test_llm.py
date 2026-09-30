@@ -23,6 +23,13 @@ def test_from_env_requires_api_key(monkeypatch):
         LLMConfig.from_env()
 
 
+def test_from_env_rejects_whitespace_only_api_key(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "   ")
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        LLMConfig.from_env()
+
+
 def test_from_env_defaults_when_only_key_set(monkeypatch):
     _clear_env(monkeypatch)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
