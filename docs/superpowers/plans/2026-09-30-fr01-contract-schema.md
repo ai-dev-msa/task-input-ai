@@ -1,5 +1,7 @@
 # FR-01: Tool Schema and Contract (`create_alokasi`) Implementation Plan
 
+> **Superseded (2026-09-30, boundary decision A):** Task 3's `HasilCI3` model and `ResponseEnvelope.hasil_ci3` field were removed after completion — this repo is AI-only and does not model CI3's response. The envelope is now `success`, `type`, `function_name`, `arguments`, `raw_message`, `user_id`. Everything else in this plan stands.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** One shared contract module holding the `create_alokasi` tool definition and the response envelope, imported by the prompt, the validator, and the tests.

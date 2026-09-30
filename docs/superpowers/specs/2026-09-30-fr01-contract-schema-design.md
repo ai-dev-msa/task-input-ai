@@ -15,7 +15,8 @@ One shared contract file that the prompt, the validator, and the tests all impor
 | Stack | Python 3.11+ / Pydantic v2 | FR-05 names Pydantic; src layout grows into FR-02..FR-15 |
 | Required arguments | All 6 | Strict schema; missing values are handled by FR-07's clarification loop, not by optional fields |
 | Layout | `src/alokasi_agent/schema.py` + `tests/` (pytest) | Single file for the contract |
-| `hasil_ci3` typing | Typed fields + `extra="allow"` | CI3 is built in a parallel track; unknown fields must not break the envelope |
+| Boundary | **AI-only**: extract → validate locally → return; no CI3 contact (decision 2026-09-30) | This repo must not define or call the backend; FR-03/FR-10/FR-11 moved to the backend track |
+| `hasil_ci3` | **Removed from this repo** — not modeled here at all | CI3's response shape is owned by the backend codebase; a copy here would drift (was: typed + `extra="allow"`) |
 | Tool shape | Provider-neutral `{"name", "description", "input_schema"}` | LLM provider is TBD (FR-02 adapts it) |
 | Empty values | `min_length=1` on free-text fields | Approved at final review 2026-09-30; empty must mean "ask the user", not "write blank data" |
 
@@ -42,9 +43,13 @@ tests/golden/create_alokasi_input_schema.json
 
 2. **`CREATE_ALOKASI_TOOL: dict`** — `{"name": "create_alokasi", "description": ..., "input_schema": CreateAlokasiArgs.model_json_schema()}`. Derived from the model, so prompt and validator cannot disagree.
 
-3. **`HasilCI3(BaseModel)`** — §8.4 fields: `success: bool`, `type: str`, `message: str`, `database: str`, `data: dict[str, Any]`. `model_config = ConfigDict(extra="allow")`.
+3. **`ResponseEnvelope(BaseModel)`** — `success: bool`, `type: str`, `function_name: str`, `arguments: str` (JSON **string**, per sample §8.5), `raw_message: str`, `user_id: str | None = None`. `extra="allow"`.
 
-4. **`ResponseEnvelope(BaseModel)`** — `success: bool`, `type: str`, `function_name: str`, `arguments: str` (JSON **string**, per sample §8.5), `hasil_ci3: HasilCI3 | None`, `raw_message: str`, `user_id: str | None = None`. Also `extra="allow"`.
+   This is the AI track's output only. The `hasil_ci3` field and the `HasilCI3` model were removed on 2026-09-30 (boundary decision): the backend adds `hasil_ci3` to the full §8.5 envelope itself, and its shape (§8.4) is defined solely by the CI3 codebase. This repo passes nothing of CI3's through, because it never talks to CI3.
+
+## Boundary (decided 2026-09-30)
+
+This repo is AI-only: `raw_message` → LLM extraction → local validation of the 6 arguments → return (result or clarification question). It makes no HTTP call to CI3, models no CI3 response, and performs no backend write. FR-03 (CI3 API client), the write-gating half of FR-10, and FR-11 (backend error handling) are owned by the backend track — see the annotated PRD.
 
 ## Out of scope (assigned to later FRs)
 
@@ -60,5 +65,5 @@ tests/golden/create_alokasi_input_schema.json
 - The §6 sample arguments validate and round-trip through the model
 - `tanggal` outside `YYYY-MM-DD` and `jam` outside `HH:MM` are rejected by pattern
 - Golden snapshot: `CREATE_ALOKASI_TOOL["input_schema"]` matches `tests/golden/create_alokasi_input_schema.json`; drift fails the suite
-- `ResponseEnvelope` parses the §8.5 full sample envelope
-- `hasil_ci3` accepts an unknown extra field without error
+- `ResponseEnvelope` parses the §8.5 sample (extra fields such as `hasil_ci3` pass through untouched — `extra="allow"`)
+- Unknown extra envelope fields are tolerated

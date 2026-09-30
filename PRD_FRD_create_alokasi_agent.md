@@ -34,7 +34,7 @@ Numeric targets for accuracy and latency: **TBD (not provided)**.
 | Parallel work | Backend and AI run in parallel; this document covers the AI part only |
 
 ## 6. Product Description
-The agent reads a natural-language message in Indonesian and converts it into a `create_alokasi` function call. That call is then sent to CI3, which creates the allocation record.
+The agent reads a natural-language message in Indonesian and converts it into a `create_alokasi` function call, and returns that call (or a clarification question) to the caller. Sending the call to CI3, which creates the allocation record, is the backend's job — the AI track does not contact CI3 (boundary decision, 2026-09-30).
 
 **Example input (`raw_message`):**
 > Isikan alokasi untuk Imam Ihsani tanggal 29 September 2026 dengan pekerjaan Development Modul PPN dari jam 09 pagi sampai 12 siang, nama proyeknya OPRS Divisi WIN 2026
@@ -57,7 +57,7 @@ The agent's job is to take an action (write a row to the database), not to write
 - One contract is shared by the prompt, the validator, and the tests.
 - Routing is simple: the model either calls the function or replies with text, such as a clarification question.
 - It's easy to extend later with functions like `update_alokasi`, `delete_alokasi`, or `cek_alokasi`.
-- The LLM only proposes the call. Our code validates it, asks for confirmation, and then runs it against CI3.
+- The LLM only proposes the call. Our code validates it; the backend owns confirmation and the actual run against CI3.
 - Trade-off: it takes more setup than plain JSON output, and we still need validation in code, because the model can return well-formed but wrong values.
 
 ---
@@ -82,17 +82,21 @@ The agent's job is to take an action (write a row to the database), not to write
 Which arguments are required is defined in FR-01.
 
 ### 8.3 Response Envelope
+The AI track returns all fields **except** `hasil_ci3` (boundary decision, 2026-09-30).
+
 | Field | Description |
 |---|---|
 | `success` | boolean |
 | `type` | e.g. `function_call` |
 | `function_name` | e.g. `create_alokasi` |
 | `arguments` | JSON string of the six arguments |
-| `hasil_ci3` | response from CI3 (see 8.4) |
+| `hasil_ci3` | response from CI3 (see 8.4) — **backend-owned, added by the backend track, not part of the AI response** |
 | `raw_message` | original user message |
 | `user_id` | present in the envelope (`null` in the sample) |
 
-### 8.4 `hasil_ci3` Structure (from sample)
+### 8.4 `hasil_ci3` Structure (from sample) — backend-owned reference
+
+> This structure belongs to the CI3 backend codebase. The AI track must not model or validate it (boundary decision, 2026-09-30); it is documented here as reference only.
 | Field | Sample value |
 |---|---|
 | `success` | `true` |
@@ -173,6 +177,8 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - **Done when:** a simple prompt returns a `create_alokasi` tool call.
 
 #### FR-03 (#3): Build the CI3 API client
+> **Owner: backend (CI3) track — out of AI scope (boundary decision, 2026-09-30).** Kept here for the backend team's reference.
+
 - Add a wrapper for the CI3 endpoint with auth, timeout, and error mapping.
 - Provide a mock/stub mode for local development, and keep the TESTING DB separate from production through config.
 - **Done when:** `create_alokasi` can be called against both the mock and the TESTING DB.
@@ -189,7 +195,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
   - Real calendar/time validity (e.g. reject `2026-13-45`, `99:99`) is owned here: parse with `date.fromisoformat`, enforce hour ≤ 23 and minute ≤ 59. FR-01's patterns only check shape.
 - If validation fails, retry once and pass the error message back to the LLM.
 - If it still fails, return `success: false` with a clear reason instead of a partial call.
-- **Done when:** malformed LLM output never reaches CI3.
+- **Done when:** malformed LLM output never reaches the backend.
 
 #### FR-06 (#6): Deterministic date/time normalizer
 - Handle "29 September 2026", "besok", "lusa", "senin depan", and "kemarin".
@@ -216,11 +222,15 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - **Done when:** the agent asks "Maksud kamu Imam Ihsani?" instead of failing silently or writing the wrong data.
 
 #### FR-10 (#10): Confirmation step before write
+> **Owner: backend (CI3) track — out of AI scope (boundary decision, 2026-09-30).** The confirmation UI and the write gating live in the backend. Note: parsing inline edits (e.g. "ganti jam selesai jadi 13:00") stays AI-side — it is text → arguments, same as FR-07's merge logic.
+
 - Show a parsed summary (name, project, date, time, task) and wait for "ya" or "batal" before calling CI3.
 - Allow inline edits ("ganti jam selesai jadi 13:00") using the same merge logic as FR-07.
 - **Done when:** nothing is written without confirmation (configurable).
 
 #### FR-11 (#11): Backend error and duplicate handling
+> **Owner: backend (CI3) track — out of AI scope (boundary decision, 2026-09-30).** The AI track never talks to CI3, so it never sees these errors.
+
 - Handle CI3 failures (`success: false`, timeout, 5xx) and overlapping time slots for the same employee.
 - Reply with friendly Indonesian messages.
 - **Done when:** errors are mapped and logged, and never crash the agent.
