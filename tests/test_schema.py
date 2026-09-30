@@ -42,6 +42,27 @@ def test_malformed_date_or_time_is_rejected(field, value):
         CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, field: value})
 
 
+@pytest.mark.parametrize(
+    "field",
+    ["nama_karyawan", "nama_proyek", "jenis_pekerjaan"],
+)
+@pytest.mark.parametrize("value", ["", "   "])
+def test_empty_or_whitespace_free_text_is_rejected(field, value):
+    with pytest.raises(ValidationError):
+        CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, field: value})
+
+
+def test_str_strip_whitespace_strips_before_validation():
+    args = CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, "nama_karyawan": "  Imam  "})
+    assert args.nama_karyawan == "Imam"
+
+    dated = CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, "tanggal": " 2026-09-29 "})
+    assert dated.tanggal == "2026-09-29"
+
+    with pytest.raises(ValidationError):
+        CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, "nama_karyawan": "   "})
+
+
 def test_missing_field_is_rejected():
     incomplete = {k: v for k, v in SAMPLE_ARGS.items() if k != "jam_selesai"}
     with pytest.raises(ValidationError):

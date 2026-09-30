@@ -12,17 +12,20 @@ class CreateAlokasiArgs(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     nama_karyawan: str = Field(
-        description="Nama lengkap karyawan, contoh: Imam Ihsani"
+        min_length=1,
+        description="Nama lengkap karyawan, contoh: Imam Ihsani",
     )
     nama_proyek: str = Field(
-        description="Nama proyek, contoh: OPRS Divisi WIN 2026"
+        min_length=1,
+        description="Nama proyek, contoh: OPRS Divisi WIN 2026",
     )
     tanggal: str = Field(
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Tanggal pekerjaan dalam format YYYY-MM-DD, contoh: 2026-09-29",
     )
     jenis_pekerjaan: str = Field(
-        description="Uraian pekerjaan, contoh: Development Modul PPN"
+        min_length=1,
+        description="Uraian pekerjaan, contoh: Development Modul PPN",
     )
     jam_mulai: str = Field(
         pattern=r"^\d{2}:\d{2}$",
