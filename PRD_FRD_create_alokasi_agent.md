@@ -186,6 +186,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 
 #### FR-05 (#5): Structured output, validation, and retry/fallback
 - Validate the arguments (Pydantic or JSON Schema): date format, HH:MM format, and `jam_selesai > jam_mulai`.
+  - Real calendar/time validity (e.g. reject `2026-13-45`, `99:99`) is owned here: parse with `date.fromisoformat`, enforce hour ≤ 23 and minute ≤ 59. FR-01's patterns only check shape.
 - If validation fails, retry once and pass the error message back to the LLM.
 - If it still fails, return `success: false` with a clear reason instead of a partial call.
 - **Done when:** malformed LLM output never reaches CI3.
