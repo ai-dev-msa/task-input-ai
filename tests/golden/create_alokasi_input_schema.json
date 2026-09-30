@@ -1,0 +1,48 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "jam_mulai": {
+      "description": "Jam mulai dalam format HH:MM, contoh: 09:00",
+      "pattern": "^\\d{2}:\\d{2}$",
+      "title": "Jam Mulai",
+      "type": "string"
+    },
+    "jam_selesai": {
+      "description": "Jam selesai dalam format HH:MM, contoh: 12:00",
+      "pattern": "^\\d{2}:\\d{2}$",
+      "title": "Jam Selesai",
+      "type": "string"
+    },
+    "jenis_pekerjaan": {
+      "description": "Uraian pekerjaan, contoh: Development Modul PPN",
+      "title": "Jenis Pekerjaan",
+      "type": "string"
+    },
+    "nama_karyawan": {
+      "description": "Nama lengkap karyawan, contoh: Imam Ihsani",
+      "title": "Nama Karyawan",
+      "type": "string"
+    },
+    "nama_proyek": {
+      "description": "Nama proyek, contoh: OPRS Divisi WIN 2026",
+      "title": "Nama Proyek",
+      "type": "string"
+    },
+    "tanggal": {
+      "description": "Tanggal pekerjaan dalam format YYYY-MM-DD, contoh: 2026-09-29",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Tanggal",
+      "type": "string"
+    }
+  },
+  "required": [
+    "nama_karyawan",
+    "nama_proyek",
+    "tanggal",
+    "jenis_pekerjaan",
+    "jam_mulai",
+    "jam_selesai"
+  ],
+  "title": "CreateAlokasiArgs",
+  "type": "object"
+}

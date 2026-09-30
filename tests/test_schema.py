@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -49,3 +51,32 @@ def test_missing_field_is_rejected():
 def test_unknown_argument_is_rejected():
     with pytest.raises(ValidationError):
         CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, "kode_proyek": "x"})
+
+
+from pathlib import Path
+
+from alokasi_agent.schema import CREATE_ALOKASI_TOOL
+
+GOLDEN_PATH = Path(__file__).parent / "golden" / "create_alokasi_input_schema.json"
+
+
+def test_tool_has_provider_neutral_shape():
+    assert set(CREATE_ALOKASI_TOOL) == {"name", "description", "input_schema"}
+    assert CREATE_ALOKASI_TOOL["name"] == "create_alokasi"
+    assert CREATE_ALOKASI_TOOL["description"]
+
+
+def test_input_schema_declares_formats():
+    props = CREATE_ALOKASI_TOOL["input_schema"]["properties"]
+    assert props["tanggal"]["pattern"] == "^\\d{4}-\\d{2}-\\d{2}$"
+    assert props["jam_mulai"]["pattern"] == "^\\d{2}:\\d{2}$"
+    assert props["jam_selesai"]["pattern"] == "^\\d{2}:\\d{2}$"
+
+
+def test_input_schema_matches_golden_snapshot():
+    actual = json.dumps(CREATE_ALOKASI_TOOL["input_schema"], indent=2, sort_keys=True) + "\n"
+    expected = GOLDEN_PATH.read_text(encoding="utf-8")
+    assert actual == expected, (
+        "Tool input_schema changed. If intentional, regenerate the golden file:\n"
+        "  .venv\\Scripts\\python.exe scripts\\update_golden.py"
+    )

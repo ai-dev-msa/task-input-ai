@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 CREATE_ALOKASI_DESCRIPTION = (
@@ -30,3 +32,10 @@ class CreateAlokasiArgs(BaseModel):
         pattern=r"^\d{2}:\d{2}$",
         description="Jam selesai dalam format HH:MM, contoh: 12:00",
     )
+
+
+CREATE_ALOKASI_TOOL: dict[str, Any] = {
+    "name": "create_alokasi",
+    "description": CREATE_ALOKASI_DESCRIPTION,
+    "input_schema": CreateAlokasiArgs.model_json_schema(),
+}
