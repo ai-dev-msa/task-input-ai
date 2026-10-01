@@ -51,6 +51,8 @@ def test_rule_markers_present():
     assert "After the function returns" not in out
     assert "create_alokasi" in out
     assert "Benar?" in out
+    assert "MSA AI Assistant (MITA)" in out
+    assert "PT Mitra Sinergi Adhitama (MSA)" in out
 
 
 def test_multi_record_rule_kept():
