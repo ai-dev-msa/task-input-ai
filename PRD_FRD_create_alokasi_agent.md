@@ -94,6 +94,7 @@ The AI track returns all fields **except** `hasil_ci3` (boundary decision, 2026-
 | `raw_message` | original user message |
 | `user_id` | present in the envelope (`null` in the sample) |
 | `reply` | model's text reply — confirmation summary or clarification question (`null` on a tool call) — added 2026-10-01, FR-04 |
+| `history` | conversation turns after this reply — store it and send it back with the next message (FR-16) |
 
 ### 8.4 `hasil_ci3` Structure (from sample) — backend-owned reference
 
@@ -153,6 +154,13 @@ The AI track returns all fields **except** `hasil_ci3` (boundary decision, 2026-
     "type": "created"
   },
   "raw_message": "Isikan alokasi untuk Imam Ihsani tanggal 29 September 2026 dengan pekerjaan Development Modul PPN dari jam 09 pagi sampai 12 siang, nama proyeknya OPRS Divisi WIN 2026",
+  "history": [
+    {
+      "role": "user",
+      "content": "Isikan alokasi untuk Imam Ihsani tanggal 29 September 2026 dengan pekerjaan Development Modul PPN dari jam 09 pagi sampai 12 siang, nama proyeknya OPRS Divisi WIN 2026"
+    },
+    {"role": "assistant", "content": ""}
+  ],
   "success": true,
   "type": "function_call",
   "user_id": null
@@ -161,7 +169,7 @@ The AI track returns all fields **except** `hasil_ci3` (boundary decision, 2026-
 
 ## 9. Functional Requirements
 
-FR-01 to FR-15 map to workflow issues #1 to #15.
+FR-01 to FR-16 map to workflow issues #1 to #16.
 
 ### Milestone 1: Foundation
 
@@ -191,7 +199,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - Take `raw_message`, run it through the LLM, and get the tool-call arguments.
 - Return the response envelope.
 - **Done when:** the example message produces exactly the sample `arguments`.
-> **Delivered (2026-10-01).** `src/alokasi_agent/agent.py` — `run(raw_message, *, user_name, employees, projects, history, user_id, now, client) -> (envelope, history)`. Routes tool call vs text reply (`type`: `function_call` | `text`), carries the model's text in `reply`, threads conversation history across the confirmation loop. Done-condition: `scripts/smoke_agent.py` live run exits 0 with the sample arguments. Argument parsing/validation stays FR-05.
+> **Delivered (2026-10-01).** `src/alokasi_agent/agent.py` — `run(raw_message, *, user_name, employees, projects, history, user_id, now, client) -> (envelope, history)`. Routes tool call vs text reply (`type`: `function_call` | `text`), carries the model's text in `reply`, threads conversation history across the confirmation loop. Done-condition: `scripts/smoke_agent.py` live run exits 0 with the sample arguments. Argument parsing/validation stays FR-05. History transport: FR-16.
 
 #### FR-05 (#5): Structured output, validation, and retry/fallback
 - Validate the arguments (Pydantic or JSON Schema): date format, HH:MM format, and `jam_selesai > jam_mulai`.
@@ -215,7 +223,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - Detect missing required fields and ask a targeted follow-up question, e.g. "Jam selesainya jam berapa?".
 - Merge the user's answer into the pending arguments (short conversation state).
 - **Done when:** a partial message followed by an answer produces a complete call.
-> **Delivered (2026-10-01).** No new `src/` code: detect-and-ask is prompt instruction #4 (marker pinned in `tests/test_prompt.py`), the short conversation state is FR-04 history threading, and FR-05 blocks any incomplete call (the model must ask instead). Done-condition: `tests/test_agent.py::test_partial_message_then_answer_produces_complete_call` (stubbed) and live `scripts/smoke_agent.py --partial` (interactive).
+> **Delivered (2026-10-01).** No new `src/` code: detect-and-ask is prompt instruction #4 (marker pinned in `tests/test_prompt.py`), the short conversation state is FR-04 history threading, and FR-05 blocks any incomplete call (the model must ask instead). Done-condition: `tests/test_agent.py::test_partial_message_then_answer_produces_complete_call` (stubbed) and live `scripts/smoke_agent.py --partial` (interactive). History transport: FR-16.
 
 #### FR-08 (#8): Edge-case input handling
 > **Known gap (2026-10-01):** prompt allows several records in one confirmation, but `ResponseEnvelope.arguments` holds a single JSON object (FR-01) — multi-record needs an FR-08 decision (sequential calls vs. list payload). Non-blocking for Slice B.
@@ -231,7 +239,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - **Done when:** the agent asks "Maksud kamu Imam Ihsani?" instead of failing silently or writing the wrong data.
 
 #### FR-10 (#10): Confirmation step before write
-> **Owner: AI track (flipped 2026-10-01).** The confirmation dialog is AI-side: the model shows the parsed summary and waits for "ya" before emitting the `create_alokasi` tool call (prompt rule in `src/alokasi_agent/prompt.py`). Inline edits ("ganti jam selesai jadi 13:00") stay AI-side — text → arguments, same as FR-07's merge logic. The backend still performs the actual write.
+> **Owner: AI track (flipped 2026-10-01).** The confirmation dialog is AI-side: the model shows the parsed summary and waits for "ya" before emitting the `create_alokasi` tool call (prompt rule in `src/alokasi_agent/prompt.py`). Inline edits ("ganti jam selesai jadi 13:00") stay AI-side — text → arguments, same as FR-07's merge logic. The backend still performs the actual write. History transport: FR-16.
 
 - Show a parsed summary (name, project, date, time, task) and wait for "ya" or "batal" before calling CI3.
 - Allow inline edits ("ganti jam selesai jadi 13:00") using the same merge logic as FR-07.
@@ -243,6 +251,12 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - Handle CI3 failures (`success: false`, timeout, 5xx) and overlapping time slots for the same employee.
 - Reply with friendly Indonesian messages.
 - **Done when:** errors are mapped and logged, and never crash the agent.
+
+#### FR-16 (#16): Carry chat history across turns
+- Return the conversation so far in the response envelope as `history` (a list of `{role, content}` turns, including this reply).
+- The caller stores it and passes it back with the next request; `run()`'s existing `history` kwarg is the input side (FR-04 already threads it in-process).
+- Without it, a confirmation like "Benar" arrives with no context and the model cannot confirm the summary it showed one turn earlier.
+- **Done when:** a two-turn conversation (summary, then "Benar") where turn 2 reuses turn 1's envelope `history` produces the `create_alokasi` call.
 
 ### Milestone 4: Quality and optimization
 
@@ -267,7 +281,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - **Done when:** any bad allocation can be traced back to the message that caused it.
 
 ## 10. Suggested Order
-#1 → #2 → #3 → #4 → #5 → #6 → #12 (start the dataset early) → #7 → #8 → #9 → #10 → #11 → #13 → #14 → #15
+#1 → #2 → #3 → #4 → #5 → #6 → #12 (start the dataset early) → #7 → #8 → #9 → #10 → #11 → #13 → #14 → #15 → #16
 
 ## 11. GitHub Labels
 `foundation`, `extraction`, `robustness`, `eval`, `optimization`
@@ -276,7 +290,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 |---|---|---|
 | Foundation | #1, #2, #3 | `foundation` |
 | Core extraction | #4, #5, #6 | `extraction` |
-| Robustness | #7, #8, #9, #10, #11 | `robustness` |
+| Robustness | #7, #8, #9, #10, #11, #16 | `robustness` |
 | Quality and optimization | #12, #13 | `eval` |
 | Quality and optimization | #14, #15 | `optimization` |
 
