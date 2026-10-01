@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from alokasi_agent.agent import run
+from alokasi_agent import run
 from alokasi_agent.schema import CREATE_ALOKASI_TOOL
 from alokasi_agent.llm import to_openai_tools
 
@@ -80,7 +80,7 @@ def test_history_threading_across_confirmation():
     assert len(stub1.calls[0]["messages"]) == 2
 
     stub2 = StubClient([tool_reply()])
-    call_run(stub2, raw_message="ya", history=history1)
+    _, history2 = call_run(stub2, raw_message="ya", history=history1)
 
     sent = stub2.calls[0]["messages"]
     assert [turn["role"] for turn in sent] == ["system", "user", "assistant", "user"]
@@ -88,6 +88,32 @@ def test_history_threading_across_confirmation():
     assert sent[2]["content"] == "... Benar?"
     assert sent[3]["content"] == "ya"
     assert [turn["role"] for turn in history1] == ["user", "assistant"]
+    assert [turn["role"] for turn in history2] == ["user", "assistant", "user", "assistant"]
+    assert history2[0]["content"] == EXAMPLE_MESSAGE
+    assert history2[3]["content"] == ""
+
+
+def test_tool_call_reply_carries_model_content():
+    env, _ = call_run(StubClient([tool_reply(content="Berikut ringkasannya.")]))
+    assert env.type == "function_call"
+    assert env.reply == "Berikut ringkasannya."
+
+
+def test_first_tool_call_wins():
+    first = SimpleNamespace(
+        function=SimpleNamespace(name="create_alokasi", arguments=SAMPLE_ARGUMENTS)
+    )
+    second = SimpleNamespace(function=SimpleNamespace(name="other", arguments="{}"))
+    reply = SimpleNamespace(content=None, tool_calls=[first, second])
+    env, _ = call_run(StubClient([reply]))
+    assert env.function_name == "create_alokasi"
+    assert env.arguments == SAMPLE_ARGUMENTS
+
+
+def test_text_reply_with_none_content_normalizes_history():
+    env, history = call_run(StubClient([text_reply(None)]))
+    assert env.reply is None
+    assert history[1] == {"role": "assistant", "content": ""}
 
 
 def test_system_prompt_carries_injected_context():
