@@ -53,3 +53,4 @@ class ResponseEnvelope(BaseModel):
     arguments: str
     raw_message: str
     user_id: str | None = None
+    reply: str | None = None
