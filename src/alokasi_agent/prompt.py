@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -147,9 +148,14 @@ def build_system_prompt(
         f"{_WEEKDAYS_ID[wib.weekday()]}, {wib.day} "
         f"{_MONTHS_ID[wib.month - 1]} {wib.year}, {wib:%H:%M} WIB"
     )
-    out = PROMPT_TEMPLATE
-    out = out.replace("{{now_wib}}", now_wib)
-    out = out.replace("{{current_user_name}}", user_name)
-    out = out.replace("{{employee_list}}", ", ".join(employees))
-    out = out.replace("{{project_list}}", ", ".join(projects))
-    return out
+    values = {
+        "now_wib": now_wib,
+        "current_user_name": user_name,
+        "employee_list": ", ".join(employees),
+        "project_list": ", ".join(projects),
+    }
+    return re.sub(
+        r"\{\{(\w+)\}\}",
+        lambda match: values.get(match.group(1), match.group(0)),
+        PROMPT_TEMPLATE,
+    )

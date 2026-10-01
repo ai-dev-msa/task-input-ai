@@ -36,10 +36,12 @@ def load_names(
         return default
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         parser.error(f"{label} file is not readable JSON: {exc}")
-    if not isinstance(data, list) or not all(isinstance(item, str) and item for item in data):
-        parser.error(f"{label} file must be a JSON array of non-empty strings")
+    if not isinstance(data, list) or not data or not all(
+        isinstance(item, str) and item for item in data
+    ):
+        parser.error(f"{label} file must be a non-empty JSON array of non-empty strings")
     return data
 
 
@@ -93,7 +95,13 @@ def main() -> int:
         if message.tool_calls:
             for call in message.tool_calls:
                 print(f"tool call: {call.function.name}")
-                print(json.dumps(json.loads(call.function.arguments), indent=2, ensure_ascii=False))
+                try:
+                    parsed = json.loads(call.function.arguments)
+                except json.JSONDecodeError:
+                    print("warning: arguments were not valid JSON, raw value:")
+                    print(call.function.arguments)
+                else:
+                    print(json.dumps(parsed, indent=2, ensure_ascii=False))
             return 0
         print("assistant:", message.content or "")
         messages.append({"role": "assistant", "content": message.content or ""})
@@ -101,9 +109,11 @@ def main() -> int:
             try:
                 reply = input("you: ").strip()
             except EOFError:
-                return 0
+                print("aborted (end of input) without a tool call")
+                return 1
             if reply.lower() in {"q", "quit", "exit"}:
-                return 0
+                print("aborted without a tool call")
+                return 1
             if reply:
                 break
         messages.append({"role": "user", "content": reply})
