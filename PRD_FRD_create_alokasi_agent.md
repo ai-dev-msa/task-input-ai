@@ -93,6 +93,7 @@ The AI track returns all fields **except** `hasil_ci3` (boundary decision, 2026-
 | `hasil_ci3` | response from CI3 (see 8.4) — **backend-owned, added by the backend track, not part of the AI response** |
 | `raw_message` | original user message |
 | `user_id` | present in the envelope (`null` in the sample) |
+| `reply` | model's text reply — confirmation summary or clarification question (`null` on a tool call) — added 2026-10-01, FR-04 |
 
 ### 8.4 `hasil_ci3` Structure (from sample) — backend-owned reference
 
@@ -190,6 +191,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - Take `raw_message`, run it through the LLM, and get the tool-call arguments.
 - Return the response envelope.
 - **Done when:** the example message produces exactly the sample `arguments`.
+> **Delivered (2026-10-01).** `src/alokasi_agent/agent.py` — `run(raw_message, *, user_name, employees, projects, history, user_id, now, client) -> (envelope, history)`. Routes tool call vs text reply (`type`: `function_call` | `text`), carries the model's text in `reply`, threads conversation history across the confirmation loop. Done-condition: `scripts/smoke_agent.py` live run exits 0 with the sample arguments. Argument parsing/validation stays FR-05.
 
 #### FR-05 (#5): Structured output, validation, and retry/fallback
 - Validate the arguments (Pydantic or JSON Schema): date format, HH:MM format, and `jam_selesai > jam_mulai`.
