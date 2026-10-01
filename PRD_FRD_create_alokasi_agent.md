@@ -57,7 +57,7 @@ The agent's job is to take an action (write a row to the database), not to write
 - One contract is shared by the prompt, the validator, and the tests.
 - Routing is simple: the model either calls the function or replies with text, such as a clarification question.
 - It's easy to extend later with functions like `update_alokasi`, `delete_alokasi`, or `cek_alokasi`.
-- The LLM only proposes the call. Our code validates it; the backend owns confirmation and the actual run against CI3.
+- The LLM only proposes the call; the model confirms with the user before proposing it. Our code validates it; the backend owns the actual run against CI3.
 - Trade-off: it takes more setup than plain JSON output, and we still need validation in code, because the model can return well-formed but wrong values.
 
 ---
@@ -175,6 +175,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - Write a system prompt that covers the role, tool-use rules, and "never guess missing fields".
 - Inject the current date and timezone (WIB) into the prompt.
 - **Done when:** a simple prompt returns a `create_alokasi` tool call.
+> **System prompt delivered (Slice B, 2026-10-01).** `src/alokasi_agent/prompt.py` (`PROMPT_TEMPLATE` + `build_system_prompt(now, user_name, employees, projects)`). **Injected-context contract:** the caller supplies `user_name`, `employee_list`, `project_list` per request — this repo performs no DB lookups (boundary §6); WIB time is derived from `now`, rendered `Rabu, 30 September 2026, 14:05 WIB`. Done-condition: `scripts/smoke_llm.py` live run returns a tool call.
 
 #### FR-03 (#3): Build the CI3 API client
 > **Owner: backend (CI3) track — out of AI scope (boundary decision, 2026-09-30).** Kept here for the backend team's reference.
@@ -198,6 +199,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - **Done when:** malformed LLM output never reaches the backend.
 
 #### FR-06 (#6): Deterministic date/time normalizer
+> **Absorbed into prompt rules (2026-10-01).** Date/time interpretation (relative phrases, "jam 09 pagi", ranges) lives in the FR-02 system prompt — no separate code normalizer; FR-05's validator still checks formats. The "unit tests cover Indonesian variants" done-condition below is superseded by these prompt rules.
 - Handle "29 September 2026", "besok", "lusa", "senin depan", and "kemarin".
 - Handle "jam 09 pagi", "12 siang", "3 sore", "jam 8 malam", "09.00", and ranges like "09:00-12:00".
 - Preferably let the LLM extract the raw strings and have code convert them, or double-check the LLM's values in code.
@@ -211,6 +213,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - **Done when:** a partial message followed by an answer produces a complete call.
 
 #### FR-08 (#8): Edge-case input handling
+> **Known gap (2026-10-01):** prompt allows several records in one confirmation, but `ResponseEnvelope.arguments` holds a single JSON object (FR-01) — multi-record needs an FR-08 decision (sequential calls vs. list payload). Non-blocking for Slice B.
 - Cover typos in names, mixed Indonesian/English, and extra filler text.
 - Cover multiple allocations in one message ("pagi dev PPN, siang testing") and non-allocation messages (out of scope).
 - Define what happens with overnight or invalid time ranges.
@@ -222,7 +225,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - **Done when:** the agent asks "Maksud kamu Imam Ihsani?" instead of failing silently or writing the wrong data.
 
 #### FR-10 (#10): Confirmation step before write
-> **Owner: backend (CI3) track — out of AI scope (boundary decision, 2026-09-30).** The confirmation UI and the write gating live in the backend. Note: parsing inline edits (e.g. "ganti jam selesai jadi 13:00") stays AI-side — it is text → arguments, same as FR-07's merge logic.
+> **Owner: AI track (flipped 2026-10-01).** The confirmation dialog is AI-side: the model shows the parsed summary and waits for "ya" before emitting the `create_alokasi` tool call (prompt rule in `src/alokasi_agent/prompt.py`). Inline edits ("ganti jam selesai jadi 13:00") stay AI-side — text → arguments, same as FR-07's merge logic. The backend still performs the actual write.
 
 - Show a parsed summary (name, project, date, time, task) and wait for "ya" or "batal" before calling CI3.
 - Allow inline edits ("ganti jam selesai jadi 13:00") using the same merge logic as FR-07.
