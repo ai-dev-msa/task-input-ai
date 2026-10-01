@@ -199,9 +199,11 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - If validation fails, retry once and pass the error message back to the LLM.
 - If it still fails, return `success: false` with a clear reason instead of a partial call.
 - **Done when:** malformed LLM output never reaches the backend.
+> **Delivered (2026-10-01).** `src/alokasi_agent/schema.py` — `validate_arguments()` (stdlib `date.fromisoformat` for real calendar dates, hour ≤ 23 / minute ≤ 59, `jam_selesai > jam_mulai`, plus completeness and unknown-key checks). `src/alokasi_agent/agent.py` — `run()` retries once with the errors in `tool` messages; a second failure returns `success: false`, `type: "error"`, empty `arguments`, and the Indonesian reason in `reply`. Done-condition: `tests/test_agent.py::test_invalid_twice_returns_error_envelope`.
 
 #### FR-06 (#6): Deterministic date/time normalizer
 > **Absorbed into prompt rules (2026-10-01).** Date/time interpretation (relative phrases, "jam 09 pagi", ranges) lives in the FR-02 system prompt — no separate code normalizer; FR-05's validator still checks formats. The "unit tests cover Indonesian variants" done-condition below is superseded by these prompt rules.
+> **Coverage gap-fill (2026-10-01).** Written-out dates ("29 September 2026" → `2026-09-29`), defaulting a missing year to the current year, `"09.00"` = `"09:00"`, and `"09:00-12:00"` ranges added to `PROMPT_TEMPLATE`; pinned by marker assertions in `tests/test_prompt.py::test_rule_markers_present`.
 - Handle "29 September 2026", "besok", "lusa", "senin depan", and "kemarin".
 - Handle "jam 09 pagi", "12 siang", "3 sore", "jam 8 malam", "09.00", and ranges like "09:00-12:00".
 - Preferably let the LLM extract the raw strings and have code convert them, or double-check the LLM's values in code.
@@ -213,6 +215,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 - Detect missing required fields and ask a targeted follow-up question, e.g. "Jam selesainya jam berapa?".
 - Merge the user's answer into the pending arguments (short conversation state).
 - **Done when:** a partial message followed by an answer produces a complete call.
+> **Delivered (2026-10-01).** No new `src/` code: detect-and-ask is prompt instruction #4 (marker pinned in `tests/test_prompt.py`), the short conversation state is FR-04 history threading, and FR-05 blocks any incomplete call (the model must ask instead). Done-condition: `tests/test_agent.py::test_partial_message_then_answer_produces_complete_call` (stubbed) and live `scripts/smoke_agent.py --partial` (interactive).
 
 #### FR-08 (#8): Edge-case input handling
 > **Known gap (2026-10-01):** prompt allows several records in one confirmation, but `ResponseEnvelope.arguments` holds a single JSON object (FR-01) — multi-record needs an FR-08 decision (sequential calls vs. list payload). Non-blocking for Slice B.

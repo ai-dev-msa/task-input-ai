@@ -53,6 +53,14 @@ def test_rule_markers_present():
     assert "Benar?" in out
     assert "MSA AI Assistant (MITA)" in out
     assert "PT Mitra Sinergi Adhitama (MSA)" in out
+    # FR-06 prompt coverage (see docs/superpowers/specs/2026-10-01-fr06-prompt-coverage-design.md)
+    assert '"29 September 2026" become 2026-09-29' in out
+    assert "If no year is given, use the current year." in out
+    assert '"09.00" means the same as "09:00"' in out
+    assert 'A range like "09:00-12:00" is' in out
+    # FR-07: missing/ambiguous fields -> one clarifying question, no call
+    assert "ask one short clarifying question" in out
+    assert "Do not call the function." in out
 
 
 def test_multi_record_rule_kept():

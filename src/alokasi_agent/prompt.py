@@ -80,12 +80,16 @@ tanggal
 - Output YYYY-MM-DD. Interpret relative phrases from the current WIB date:
   "hari ini", "besok", "lusa", "kemarin", "Senin depan", "minggu depan
   Rabu", "tanggal 5". If no date is given, ask.
+- Dates written out like "29 September 2026" become 2026-09-29.
+- If no year is given, use the current year.
 - If a phrase could mean two different dates, ask.
 
 jam_mulai / jam_selesai
 - Output HH:MM, 24-hour. "pagi" = AM, "siang" = 11:00-14:00,
   "sore" = 15:00-18:00, "malam" = 18:00 or later. "Jam 9 pagi" -> 09:00,
   "12 siang" -> 12:00, "jam 3 sore" -> 15:00.
+- "09.00" means the same as "09:00". A range like "09:00-12:00" is
+  jam_mulai-jam_selesai.
 - Standard working hours are 08:30-17:30. Use them only to read bare
   numbers with no marker: 8-11 -> AM, 12 -> 12:00, 1-5 -> PM. For 6 and 7,
   ask ("pagi atau sore?").

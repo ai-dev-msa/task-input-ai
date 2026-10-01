@@ -1,84 +1,20 @@
 import json
-
-import pytest
-from pydantic import ValidationError
-
-from alokasi_agent.schema import CreateAlokasiArgs
-
-SAMPLE_ARGS = {
-    "nama_karyawan": "Imam Ihsani",
-    "nama_proyek": "OPRS Divisi WIN 2026",
-    "tanggal": "2026-09-29",
-    "jenis_pekerjaan": "Development Modul PPN",
-    "jam_mulai": "09:00",
-    "jam_selesai": "12:00",
-}
-
-
-def test_sample_arguments_validate_and_round_trip():
-    args = CreateAlokasiArgs.model_validate(SAMPLE_ARGS)
-    assert args.model_dump() == SAMPLE_ARGS
-    assert CreateAlokasiArgs.model_validate_json(args.model_dump_json()) == args
-
-
-def test_all_six_fields_are_required():
-    schema = CreateAlokasiArgs.model_json_schema()
-    assert set(schema["required"]) == set(SAMPLE_ARGS)
-    assert len(schema["required"]) == 6
-
-
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("tanggal", "29-09-2026"),
-        ("tanggal", "2026/09/29"),
-        ("tanggal", "2026-9-29"),
-        ("jam_mulai", "9:00"),
-        ("jam_selesai", "12.00"),
-    ],
-)
-def test_malformed_date_or_time_is_rejected(field, value):
-    with pytest.raises(ValidationError):
-        CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, field: value})
-
-
-@pytest.mark.parametrize(
-    "field",
-    ["nama_karyawan", "nama_proyek", "jenis_pekerjaan"],
-)
-@pytest.mark.parametrize("value", ["", "   "])
-def test_empty_or_whitespace_free_text_is_rejected(field, value):
-    with pytest.raises(ValidationError):
-        CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, field: value})
-
-
-def test_str_strip_whitespace_strips_before_validation():
-    args = CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, "nama_karyawan": "  Imam  "})
-    assert args.nama_karyawan == "Imam"
-
-    dated = CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, "tanggal": " 2026-09-29 "})
-    assert dated.tanggal == "2026-09-29"
-
-    with pytest.raises(ValidationError):
-        CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, "nama_karyawan": "   "})
-
-
-def test_missing_field_is_rejected():
-    incomplete = {k: v for k, v in SAMPLE_ARGS.items() if k != "jam_selesai"}
-    with pytest.raises(ValidationError):
-        CreateAlokasiArgs.model_validate(incomplete)
-
-
-def test_unknown_argument_is_rejected():
-    with pytest.raises(ValidationError):
-        CreateAlokasiArgs.model_validate({**SAMPLE_ARGS, "kode_proyek": "x"})
-
-
 from pathlib import Path
 
-from alokasi_agent.schema import CREATE_ALOKASI_TOOL
+import pytest
+
+from alokasi_agent.schema import CREATE_ALOKASI_TOOL, validate_arguments
 
 GOLDEN_PATH = Path(__file__).parent / "golden" / "create_alokasi_input_schema.json"
+
+SIX_FIELDS = {
+    "nama_karyawan",
+    "nama_proyek",
+    "tanggal",
+    "jenis_pekerjaan",
+    "jam_mulai",
+    "jam_selesai",
+}
 
 
 def test_tool_has_provider_neutral_shape():
@@ -94,6 +30,12 @@ def test_input_schema_declares_formats():
     assert props["jam_selesai"]["pattern"] == "^\\d{2}:\\d{2}$"
 
 
+def test_all_six_fields_are_required():
+    schema = CREATE_ALOKASI_TOOL["input_schema"]
+    assert set(schema["required"]) == SIX_FIELDS
+    assert len(schema["required"]) == 6
+
+
 def test_input_schema_matches_golden_snapshot():
     actual = json.dumps(CREATE_ALOKASI_TOOL["input_schema"], indent=2, sort_keys=True) + "\n"
     expected = GOLDEN_PATH.read_text(encoding="utf-8")
@@ -103,45 +45,53 @@ def test_input_schema_matches_golden_snapshot():
     )
 
 
-from alokasi_agent.schema import ResponseEnvelope
+# --- FR-05: validate_arguments ---
 
-SAMPLE_ENVELOPE = {
-    "arguments": '{"nama_karyawan":"Imam Ihsani","nama_proyek":"OPRS Divisi WIN 2026",'
-    '"tanggal":"2026-09-29","jenis_pekerjaan":"Development Modul PPN",'
-    '"jam_mulai":"09:00","jam_selesai":"12:00"}',
-    "function_name": "create_alokasi",
-    "raw_message": "Isikan alokasi untuk Imam Ihsani tanggal 29 September 2026 dengan "
-    "pekerjaan Development Modul PPN dari jam 09 pagi sampai 12 siang, "
-    "nama proyeknya OPRS Divisi WIN 2026",
-    "success": True,
-    "type": "function_call",
-    "user_id": None,
+VALID_ARGS = {
+    "nama_karyawan": "Imam Ihsani",
+    "nama_proyek": "OPRS Divisi WIN 2026",
+    "tanggal": "2026-09-29",
+    "jenis_pekerjaan": "Development Modul PPN",
+    "jam_mulai": "09:00",
+    "jam_selesai": "12:00",
 }
 
 
-def test_envelope_parses_full_sample():
-    envelope = ResponseEnvelope.model_validate(SAMPLE_ENVELOPE)
-    assert envelope.success is True
-    assert envelope.type == "function_call"
-    assert envelope.function_name == "create_alokasi"
-    assert json.loads(envelope.arguments) == SAMPLE_ARGS
-    assert envelope.raw_message.startswith("Isikan alokasi")
-    assert envelope.user_id is None
+def as_json(**overrides):
+    return json.dumps({**VALID_ARGS, **overrides})
 
 
-def test_envelope_tolerates_unknown_fields():
-    envelope = ResponseEnvelope.model_validate({**SAMPLE_ENVELOPE, "request_id": "abc-123"})
-    assert envelope.model_extra["request_id"] == "abc-123"
+def test_validate_accepts_sample():
+    assert validate_arguments(as_json()) == []
 
 
-def test_envelope_optional_fields_default_to_none():
-    envelope = ResponseEnvelope.model_validate(
-        {
-            "success": False,
-            "type": "error",
-            "function_name": "create_alokasi",
-            "arguments": "{}",
-            "raw_message": "pesan",
-        }
-    )
-    assert envelope.user_id is None
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "bukan json {",
+        "[1, 2]",
+        "null",
+        json.dumps({k: v for k, v in VALID_ARGS.items() if k != "jam_selesai"}),
+        as_json(nama_karyawan=""),
+        as_json(nama_karyawan="   "),
+        json.dumps({**VALID_ARGS, "jenis_pekerjaan": None}),
+        as_json(tanggal="2026-13-45"),
+        as_json(tanggal="2026-9-29"),
+        as_json(tanggal="29-09-2026"),
+        as_json(jam_mulai="99:99"),
+        as_json(jam_mulai="12:60"),
+        as_json(jam_mulai="9:00"),
+        as_json(jam_mulai="09:00", jam_selesai="09:00"),
+        as_json(jam_mulai="12:00", jam_selesai="09:00"),
+        as_json(kode_proyek="x"),
+    ],
+)
+def test_validate_rejects_malformed_output(payload):
+    assert validate_arguments(payload) != []
+
+
+def test_validate_reports_every_missing_field():
+    errors = validate_arguments('{"tanggal":"2026-13-45"}')
+    for field in ("nama_karyawan", "nama_proyek", "jenis_pekerjaan", "jam_mulai", "jam_selesai"):
+        assert any(field in error for error in errors)
+    assert any("tanggal" in error for error in errors)

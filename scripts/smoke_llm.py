@@ -13,7 +13,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from alokasi_agent.llm import LLMClient, to_openai_tools
+from alokasi_agent.llm import complete, to_openai_tools
 from alokasi_agent.prompt import build_system_prompt
 from alokasi_agent.schema import CREATE_ALOKASI_TOOL
 
@@ -91,23 +91,22 @@ def main() -> int:
         print(json.dumps({"messages": messages, "tools": tools}, indent=2, ensure_ascii=False))
         return 0
 
-    client = LLMClient()
     for _ in range(MAX_TURNS):
-        response = client.complete(messages, tools=tools)
-        message = response.choices[0].message
-        if message.tool_calls:
-            for call in message.tool_calls:
-                print(f"tool call: {call.function.name}")
+        response = complete(messages, tools=tools)
+        message = response["choices"][0]["message"]
+        if message.get("tool_calls"):
+            for call in message["tool_calls"]:
+                print(f"tool call: {call['function']['name']}")
                 try:
-                    parsed = json.loads(call.function.arguments)
+                    parsed = json.loads(call["function"]["arguments"])
                 except json.JSONDecodeError:
                     print("warning: arguments were not valid JSON, raw value:")
-                    print(call.function.arguments)
+                    print(call["function"]["arguments"])
                 else:
                     print(json.dumps(parsed, indent=2, ensure_ascii=False))
             return 0
-        print("assistant:", message.content or "")
-        messages.append({"role": "assistant", "content": message.content or ""})
+        print("assistant:", message.get("content") or "")
+        messages.append({"role": "assistant", "content": message.get("content") or ""})
         while True:
             try:
                 reply = input("you: ").strip()
