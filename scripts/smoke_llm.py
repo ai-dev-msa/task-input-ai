@@ -11,6 +11,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from alokasi_agent.llm import LLMClient, to_openai_tools
 from alokasi_agent.prompt import build_system_prompt
 from alokasi_agent.schema import CREATE_ALOKASI_TOOL
@@ -59,6 +61,7 @@ def build_request(
 
 
 def main() -> int:
+    load_dotenv()
     parser = argparse.ArgumentParser(description="Smoke-test the FR-02 LLM client")
     parser.add_argument(
         "--dry-run",
