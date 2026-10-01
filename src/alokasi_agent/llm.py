@@ -25,6 +25,7 @@ class LLMConfig:
     temperature: float = 0.0
     timeout: float = 30.0
     base_url: str | None = None
+    reasoning_effort: str | None = None
 
     @classmethod
     def from_env(cls) -> LLMConfig:
@@ -33,12 +34,14 @@ class LLMConfig:
             raise ValueError(
                 "OPENAI_API_KEY is not set. Export it before creating an LLMClient."
             )
+        effort = os.environ.get("ALOKASI_REASONING_EFFORT", "").strip()
         return cls(
             api_key=api_key,
             model=os.environ.get("ALOKASI_MODEL") or cls.model,
             temperature=_env_float("ALOKASI_TEMPERATURE", cls.temperature),
             timeout=_env_float("ALOKASI_TIMEOUT", cls.timeout),
             base_url=os.environ.get("OPENAI_BASE_URL") or None,
+            reasoning_effort=effort or None,
         )
 
 
@@ -61,6 +64,8 @@ class LLMClient:
             "messages": messages,
             "temperature": self.config.temperature,
         }
+        if self.config.reasoning_effort:
+            kwargs["reasoning_effort"] = self.config.reasoning_effort
         if tools:
             kwargs["tools"] = tools
         return self._client.chat.completions.create(**kwargs)
