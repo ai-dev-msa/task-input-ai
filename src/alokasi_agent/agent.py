@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
@@ -10,9 +11,26 @@ from alokasi_agent.prompt import build_system_prompt
 from alokasi_agent.schema import CREATE_ALOKASI_TOOL, validate_arguments
 
 
-def _first_tool_call(message: dict[str, Any]) -> dict[str, Any] | None:
-    tool_calls = message.get("tool_calls") or []
-    return tool_calls[0] if tool_calls else None
+def _alokasi_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every create_alokasi tool call in the model's reply (FR-08: one per row).
+
+    The tool list only offers create_alokasi, but a stray call to any other
+    function is ignored rather than treated as a row.
+    """
+    calls = message.get("tool_calls") or []
+    return [
+        tc
+        for tc in calls
+        if (tc.get("function") or {}).get("name") == "create_alokasi"
+    ]
+
+
+def _validate_calls(calls: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """FR-05: validation errors per tool-call id. Empty list = that row is safe."""
+    return {
+        tc.get("id", ""): validate_arguments(tc["function"].get("arguments", ""))
+        for tc in calls
+    }
 
 
 def run(
@@ -45,28 +63,33 @@ def run(
 
     response = complete(messages, tools=tools)
     message = response["choices"][0]["message"]
-    call = _first_tool_call(message)
-    errors = validate_arguments(call["function"].get("arguments", "")) if call else []
+    calls = _alokasi_calls(message)
+    errors_by_id = _validate_calls(calls)
 
-    if errors:
+    if any(errors_by_id.values()):
         # FR-05: retry once, handing the validation errors back to the model.
-        # The API needs a tool reply for every tool call in that assistant turn.
+        # The API needs a tool reply for every tool call in that assistant turn;
+        # a row that already validated gets "OK" so its id still has a reply.
         messages = messages + [
             {"role": "assistant", "content": message.get("content"),
              "tool_calls": message.get("tool_calls")},
             *[
                 {"role": "tool", "tool_call_id": tc.get("id", ""),
-                 "content": "\n".join(errors)}
+                 "content": "\n".join(errors_by_id.get(tc.get("id", ""), []))
+                 or "OK"}
                 for tc in message.get("tool_calls") or []
             ],
         ]
         response = complete(messages, tools=tools)
         message = response["choices"][0]["message"]
-        call = _first_tool_call(message)
-        errors = validate_arguments(call["function"].get("arguments", "")) if call else []
+        calls = _alokasi_calls(message)
+        errors_by_id = _validate_calls(calls)
 
-    if errors:
+    if any(errors_by_id.values()):
         # Still malformed after the retry: refuse instead of sending a partial call.
+        errors = [
+            error for tc in calls for error in errors_by_id.get(tc.get("id", ""), [])
+        ]
         reason = "Data tidak valid setelah dicoba ulang: " + "; ".join(errors)
         envelope = {
             "success": False,
@@ -78,12 +101,18 @@ def run(
             "reply": reason,
         }
         history_content: str = reason
-    elif call is not None:
+    elif calls:
+        # One row keeps the model's object string (PRD sample shape unchanged);
+        # several rows become a JSON array string the backend iterates (FR-08).
+        rows = [tc["function"]["arguments"] for tc in calls]
+        arguments = (
+            rows[0] if len(rows) == 1 else json.dumps([json.loads(row) for row in rows])
+        )
         envelope = {
             "success": True,
             "type": "function_call",
-            "function_name": call["function"]["name"],
-            "arguments": call["function"]["arguments"],
+            "function_name": "create_alokasi",
+            "arguments": arguments,
             "raw_message": raw_message,
             "user_id": user_id,
             "reply": message.get("content"),

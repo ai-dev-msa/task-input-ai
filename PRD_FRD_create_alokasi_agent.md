@@ -219,6 +219,7 @@ FR-01 to FR-15 map to workflow issues #1 to #15.
 
 #### FR-08 (#8): Edge-case input handling
 > **Known gap (2026-10-01):** prompt allows several records in one confirmation, but `ResponseEnvelope.arguments` holds a single JSON object (FR-01) — multi-record needs an FR-08 decision (sequential calls vs. list payload). Non-blocking for Slice B.
+> **Decision (2026-10-01): parallel calls per row.** On confirmation the model emits one `create_alokasi` tool call per row in the same reply; `run()` validates every call (retry once with per-call `tool` replies) and refuses if any row is still invalid. Single row keeps the object-string `arguments` (§8.5 sample unchanged); multiple rows return a JSON array string of row objects — the backend iterates the array. Prompt rules and the two-row example live in `src/alokasi_agent/prompt.py`; pinned by `tests/test_agent.py::test_multiple_rows_produce_array_arguments`.
 - Cover typos in names, mixed Indonesian/English, and extra filler text.
 - Cover multiple allocations in one message ("pagi dev PPN, siang testing") and non-allocation messages (out of scope).
 - Define what happens with overnight or invalid time ranges.

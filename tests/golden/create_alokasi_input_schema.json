@@ -31,10 +31,22 @@
       "title": "Nama Proyek",
       "type": "string"
     },
+    "review": {
+      "description": "Status/hasil pekerjaan, contoh: [1/1/1/0] Done",
+      "minLength": 1,
+      "title": "Review",
+      "type": "string"
+    },
     "tanggal": {
       "description": "Tanggal pekerjaan dalam format YYYY-MM-DD, contoh: 2026-09-29",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "title": "Tanggal",
+      "type": "string"
+    },
+    "tim_pekerjaan": {
+      "description": "Nama anggota tim, dipisah koma, contoh: Bimo Aditya Pangestu, Janie Natalie",
+      "minLength": 1,
+      "title": "Tim Pekerjaan",
       "type": "string"
     }
   },

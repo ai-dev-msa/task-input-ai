@@ -119,6 +119,85 @@ def test_first_tool_call_wins():
     assert env["arguments"] == SAMPLE_ARGUMENTS
 
 
+# --- FR-08: multi-row delivery (parallel calls per row) ---
+
+ROW2_ARGUMENTS = (
+    '{"nama_karyawan":"Budi Santoso","nama_proyek":"OPRS Divisi WIN 2026",'
+    '"tanggal":"2026-09-30","jenis_pekerjaan":"Testing sistem",'
+    '"jam_mulai":"16:30","jam_selesai":"17:00","review":"[1/1/0/2] Done"}'
+)
+
+
+def tool_reply_multi(arguments_list):
+    return {
+        "content": None,
+        "tool_calls": [
+            {
+                "id": f"call_{i}",
+                "type": "function",
+                "function": {"name": "create_alokasi", "arguments": arguments},
+            }
+            for i, arguments in enumerate(arguments_list, start=1)
+        ],
+    }
+
+
+def test_multiple_rows_produce_array_arguments():
+    calls = []
+    reply = tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS])
+    env, _ = call_run(make_stub([reply], calls))
+    assert env["success"] is True
+    assert env["type"] == "function_call"
+    assert env["function_name"] == "create_alokasi"
+    rows = json.loads(env["arguments"])
+    assert len(rows) == 2
+    assert rows[0]["nama_karyawan"] == "Imam Ihsani"
+    assert rows[1]["nama_karyawan"] == "Budi Santoso"
+    assert rows[1]["review"] == "[1/1/0/2] Done"
+    assert len(calls) == 1
+
+
+def test_single_row_stays_object_string():
+    calls = []
+    env, _ = call_run(make_stub([tool_reply()], calls))
+    assert json.loads(env["arguments"]) == json.loads(SAMPLE_ARGUMENTS)
+    assert not env["arguments"].lstrip().startswith("[")
+
+
+def test_mixed_multi_row_retries_then_returns_all_rows():
+    calls = []
+    stub = make_stub(
+        [tool_reply_multi([SAMPLE_ARGUMENTS, INVALID_ARGUMENTS]),
+         tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS])],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["success"] is True
+    rows = json.loads(env["arguments"])
+    assert len(rows) == 2
+    assert len(calls) == 2
+    tool_msgs = [m for m in calls[1]["messages"] if m["role"] == "tool"]
+    assert len(tool_msgs) == 2
+    assert tool_msgs[0]["content"] == "OK"
+    assert "tanggal" in tool_msgs[1]["content"]
+
+
+def test_multi_row_invalid_twice_returns_error_envelope():
+    calls = []
+    stub = make_stub(
+        [tool_reply_multi([INVALID_ARGUMENTS, INVALID_ARGUMENTS]),
+         tool_reply_multi([INVALID_ARGUMENTS, INVALID_ARGUMENTS])],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["success"] is False
+    assert env["type"] == "error"
+    assert env["function_name"] == ""
+    assert env["arguments"] == ""
+    assert env["reply"].startswith("Data tidak valid setelah dicoba ulang")
+    assert len(calls) == 2
+
+
 def test_text_reply_with_none_content_normalizes_history():
     env, history = call_run(make_stub([text_reply(None)], []))
     assert env["reply"] is None

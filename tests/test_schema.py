@@ -65,6 +65,20 @@ def test_validate_accepts_sample():
     assert validate_arguments(as_json()) == []
 
 
+def test_validate_accepts_optional_fields():
+    assert (
+        validate_arguments(
+            as_json(review="[1/1/1/0] Done", tim_pekerjaan="Imam Ihsani, Budi Santoso")
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize("payload", [as_json(review=""), as_json(tim_pekerjaan="   ")])
+def test_validate_rejects_blank_optional_field(payload):
+    assert validate_arguments(payload) != []
+
+
 @pytest.mark.parametrize(
     "payload",
     [

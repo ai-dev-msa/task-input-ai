@@ -18,6 +18,12 @@ REQUIRED_FIELDS = (
     "jam_selesai",
 )
 
+# Optional fields the model may add; absent means "user did not provide".
+OPTIONAL_FIELDS = (
+    "review",
+    "tim_pekerjaan",
+)
+
 CREATE_ALOKASI_DESCRIPTION = (
     "Buat satu baris alokasi kerja karyawan untuk satu tanggal: "
     "nama karyawan, nama proyek, tanggal, jenis pekerjaan, dan jam mulai/selesai."
@@ -59,10 +65,22 @@ CREATE_ALOKASI_TOOL = {
                 "title": "Nama Proyek",
                 "type": "string",
             },
+            "review": {
+                "description": "Status/hasil pekerjaan, contoh: [1/1/1/0] Done",
+                "minLength": 1,
+                "title": "Review",
+                "type": "string",
+            },
             "tanggal": {
                 "description": "Tanggal pekerjaan dalam format YYYY-MM-DD, contoh: 2026-09-29",
                 "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
                 "title": "Tanggal",
+                "type": "string",
+            },
+            "tim_pekerjaan": {
+                "description": "Nama anggota tim, dipisah koma, contoh: Bimo Aditya Pangestu, Janie Natalie",
+                "minLength": 1,
+                "title": "Tim Pekerjaan",
                 "type": "string",
             },
         },
@@ -116,8 +134,15 @@ def validate_arguments(arguments: str) -> list[str]:
         if not isinstance(value, str) or not value.strip():
             errors.append(f"{name} kosong atau tidak diisi")
 
-    for name in sorted(set(args) - set(REQUIRED_FIELDS)):
+    for name in sorted(set(args) - set(REQUIRED_FIELDS) - set(OPTIONAL_FIELDS)):
         errors.append(f"{name} bukan argumen create_alokasi")
+
+    # Optional fields: if sent at all, they must carry real content.
+    for name in OPTIONAL_FIELDS:
+        if name in args:
+            value = args[name]
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"{name} kosong atau tidak diisi")
 
     tanggal = args.get("tanggal")
     if isinstance(tanggal, str) and tanggal.strip() and not _is_real_date(tanggal):

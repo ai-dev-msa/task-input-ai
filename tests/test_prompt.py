@@ -68,6 +68,29 @@ def test_multi_record_rule_kept():
     assert "(For several records, one line each.)" in out
 
 
+def test_optional_field_rules_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "Plus two optional fields" in out
+    assert "review (optional)" in out
+    assert "tim_pekerjaan (optional)" in out
+    assert '"[a/b/c/d] status"' in out
+    assert "the work name goes to jenis_pekerjaan" in out
+    assert "max 3 days after the task date" in out
+    assert "Do not ask the user about it." in out
+    assert "omitted when the user gave none" in out
+    assert "character-for-character in the valid" in out
+    assert 'Add " | review"' in out
+
+
+def test_multi_row_rules_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "call it once per row" in out
+    assert "all calls\n   in the same reply" in out
+    assert "independently from the current WIB date" in out
+    assert "two `create_alokasi` calls in the same reply" in out
+    assert "Dimas Eka Priyadi | OPRS Divisi WIN 2026 | 2026-09-30" in out
+
+
 def test_non_utc_aware_datetime():
     plus_five_half = timezone(timedelta(hours=5, minutes=30))
     out = build(datetime(2026, 9, 30, 6, 5, tzinfo=plus_five_half))
