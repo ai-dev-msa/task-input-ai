@@ -234,6 +234,7 @@ FR-01 to FR-16 map to workflow issues #1 to #16.
 - **Done when:** every case has a defined outcome: call, ask, split, or refuse.
 
 #### FR-09 (#9): Entity resolution (employee and project names)
+> **Absorbed into prompt rules (2026-10-05).** Matching is prompt-only: "Must match a valid employee exactly. Fix only obvious casing or typos when exactly one employee fits. If two or more could fit, or none fits, ask." (`src/alokasi_agent/prompt.py` field rules), with the multi-candidate example "Budi yang mana: Budi Santoso atau Budi Hartono?". The comparison runs only against the caller-injected `{{employee_list}}` / `{{project_list}}` — this repo does no DB retrieval (boundary §6), so "not found in CI3" and agent-vs-CI3 fuzzy matching stay backend questions (same owner as FR-03). Near-match suggestion ("Maksud kamu Imam Ihsani?") is left to the model's judgment; FR-10's confirmation shows the resolved name before any write. Pinned by marker assertions in `tests/test_prompt.py::test_rule_markers_present`.
 - Handle a name not found in CI3, multiple matches, and near-matches ("Imam Ihsan").
 - Decide where fuzzy matching lives (agent or CI3), and show the user the candidates when a name is ambiguous.
 - **Done when:** the agent asks "Maksud kamu Imam Ihsani?" instead of failing silently or writing the wrong data.

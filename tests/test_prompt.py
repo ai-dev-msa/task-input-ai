@@ -66,6 +66,10 @@ def test_rule_markers_present():
     assert "Wait for the next message." in out
     assert '"ganti jam selesai jadi 13:00"' in out
     assert "show the full summary line again with the new value" in out
+    # FR-09: entity resolution is prompt-only (caller-injected lists, no DB)
+    assert "exactly one employee fits" in out
+    assert "Budi yang mana" in out
+    assert "Never invent or abbreviate" in out
 
 
 def test_multi_record_rule_kept():
