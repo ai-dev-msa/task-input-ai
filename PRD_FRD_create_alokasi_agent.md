@@ -234,12 +234,12 @@ FR-01 to FR-16 map to workflow issues #1 to #16.
 - **Done when:** every case has a defined outcome: call, ask, split, or refuse.
 
 #### FR-09 (#9): Entity resolution (employee and project names)
-> **Absorbed into prompt rules (2026-10-05).** Matching is prompt-only: "Must match a valid employee exactly. Fix only obvious casing or typos when exactly one employee fits. If two or more could fit, or none fits, ask." (`src/alokasi_agent/prompt.py` field rules), with the multi-candidate example "Budi yang mana: Budi Santoso atau Budi Hartono?". The comparison runs only against the caller-injected `{{employee_list}}` / `{{project_list}}` — this repo does no DB retrieval (boundary §6), so "not found in CI3" and agent-vs-CI3 fuzzy matching stay backend questions (same owner as FR-03). Near-match suggestion ("Maksud kamu Imam Ihsani?") is left to the model's judgment; FR-10's confirmation shows the resolved name before any write. Pinned by marker assertions in `tests/test_prompt.py::test_rule_markers_present`.
 - Handle a name not found in CI3, multiple matches, and near-matches ("Imam Ihsan").
 - Decide where fuzzy matching lives (agent or CI3), and show the user the candidates when a name is ambiguous.
 - **Done when:** the agent asks "Maksud kamu Imam Ihsani?" instead of failing silently or writing the wrong data.
 
 #### FR-10 (#10): Confirmation step before write
+> **Delivered (2026-10-05).** Prompt-only, no `src/` code: rule #3 in `src/alokasi_agent/prompt.py` (show the summary line, call `create_alokasi` only after they confirm), cancel rule #5 ("batal" → reply without calling), and the inline-edit rule ("ganti jam selesai jadi 13:00" updates the value and re-shows the summary). Pinned by the `# FR-10` marker asserts in `tests/test_prompt.py::test_rule_markers_present`; two-turn confirm flow covered by `tests/test_agent.py::test_history_threading_across_confirmation`. Nothing is written without confirmation because the model emits no tool call before "ya" — enforcement is prompt-level (see FR-09 note on prompt-side guarantees), and the backend performs the actual write.
 > **Owner: AI track (flipped 2026-10-01).** The confirmation dialog is AI-side: the model shows the parsed summary and waits for "ya" before emitting the `create_alokasi` tool call (prompt rule in `src/alokasi_agent/prompt.py`). Inline edits ("ganti jam selesai jadi 13:00") stay AI-side — text → arguments, same as FR-07's merge logic. The backend still performs the actual write. History transport: FR-16.
 
 - Show a parsed summary (name, project, date, time, task) and wait for "ya" or "batal" before calling CI3.
