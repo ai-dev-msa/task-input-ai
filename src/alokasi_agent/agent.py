@@ -135,4 +135,7 @@ def run(
         {"role": "user", "content": raw_message},
         {"role": "assistant", "content": history_content},
     ]
+    # FR-16: the backend only sees the envelope, so the notepad rides along
+    # in it; it stores the list and passes it back as history= next request.
+    envelope["history"] = new_history
     return envelope, new_history

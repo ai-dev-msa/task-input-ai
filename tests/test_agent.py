@@ -104,6 +104,28 @@ def test_history_threading_across_confirmation():
     assert history2[3]["content"] == ""
 
 
+def test_envelope_history_confirms_second_turn():
+    # FR-16 done-condition: turn 2 reuses turn 1's envelope history, not the tuple.
+    calls1 = []
+    env1, _ = call_run(make_stub([text_reply("... Benar?")], calls1))
+
+    calls2 = []
+    env2, _ = call_run(
+        make_stub([tool_reply()], calls2), raw_message="ya", history=env1["history"]
+    )
+
+    sent = calls2[0]["messages"]
+    assert [turn["role"] for turn in sent] == ["system", "user", "assistant", "user"]
+    assert env2["type"] == "function_call"
+
+
+def test_envelope_carries_full_text_history():
+    calls = []
+    env, history = call_run(make_stub([tool_reply()], calls))
+    assert env["history"] == history
+    assert [turn["role"] for turn in env["history"]] == ["user", "assistant"]
+
+
 def test_tool_call_reply_carries_model_content():
     env, _ = call_run(make_stub([tool_reply(content="Berikut ringkasannya.")], []))
     assert env["type"] == "function_call"
@@ -275,6 +297,7 @@ def test_invalid_twice_returns_error_envelope():
     assert env["raw_message"] == EXAMPLE_MESSAGE
     assert len(calls) == 2
     assert history[1] == {"role": "assistant", "content": env["reply"]}
+    assert env["history"] == history
 
 
 def test_invalid_then_text_reply_is_normal_text():
