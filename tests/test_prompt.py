@@ -61,6 +61,11 @@ def test_rule_markers_present():
     # FR-07: missing/ambiguous fields -> one clarifying question, no call
     assert "ask one short clarifying question" in out
     assert "Do not call the function." in out
+    # FR-10: confirmation gate — cancel without calling, edits re-show the summary
+    assert '"batal"' in out
+    assert "Wait for the next message." in out
+    assert '"ganti jam selesai jadi 13:00"' in out
+    assert "show the full summary line again with the new value" in out
 
 
 def test_multi_record_rule_kept():

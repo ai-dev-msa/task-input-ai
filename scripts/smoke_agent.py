@@ -1,8 +1,9 @@
 """Live done-condition for FR-04 (and FR-07 with --partial).
 
 Run: scripts/smoke_agent.py  (needs OPENAI_API_KEY in .env)
-Exit 0 iff run() ends in a create_alokasi tool call whose arguments match
-the PRD section 6 sample exactly.
+Exit 0 iff the model confirms first (turn 1 is a question, FR-10) and run()
+ends in a create_alokasi tool call whose arguments match the PRD section 6
+sample exactly.
 
 Run: scripts/smoke_agent.py --partial  (FR-07)
 Starts from a partial message, prints each clarifying question, and reads
@@ -76,6 +77,10 @@ def main() -> int:
         )
         print(f"turn {turn}: type={envelope['type']}")
         if envelope["type"] == "function_call":
+            if not args.partial and turn == 1:
+                # FR-10: the prompt requires a "Benar?" confirmation first.
+                print("FR-10: model called without confirmation on turn 1")
+                return 1
             break
         print(f"assistant: {envelope['reply']}")
         if args.partial:
