@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# FR-13 eval runner output (eval/baseline.json stays tracked on purpose)
+eval/results.json

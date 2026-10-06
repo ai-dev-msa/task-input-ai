@@ -1,0 +1,608 @@
+{
+  "metrics": {
+    "decision_correct": 52,
+    "decision_total": 83,
+    "decision_accuracy": 0.6265060240963856,
+    "row_exact": 42,
+    "row_total": 69,
+    "row_exact_rate": 0.6086956521739131,
+    "field_correct": 306,
+    "field_total": 473,
+    "field_accuracy": 0.6469344608879493,
+    "ask_expected": 12,
+    "ask_predicted": 25,
+    "ask_correct": 7,
+    "ask_precision": 0.28,
+    "ask_recall": 0.5833333333333334,
+    "optional_correct": 7,
+    "optional_total": 10,
+    "optional_field_recall": 0.7,
+    "api_error_count": 0,
+    "confusion": {
+      "call": {
+        "call": 20,
+        "confirm": 5,
+        "ask": 5,
+        "other": 3
+      },
+      "confirm": {
+        "call": 0,
+        "confirm": 23,
+        "ask": 13,
+        "other": 0
+      },
+      "ask": {
+        "call": 0,
+        "confirm": 1,
+        "ask": 7,
+        "other": 4
+      },
+      "other": {
+        "call": 0,
+        "confirm": 0,
+        "ask": 0,
+        "other": 2
+      }
+    },
+    "per_category": {
+      "time_format": {
+        "decision_correct": 6,
+        "decision_total": 11,
+        "row_exact": 7,
+        "row_total": 10,
+        "field_correct": 42,
+        "field_total": 60
+      },
+      "relative_date": {
+        "decision_correct": 2,
+        "decision_total": 8,
+        "row_exact": 3,
+        "row_total": 8,
+        "field_correct": 18,
+        "field_total": 48
+      },
+      "happy_path": {
+        "decision_correct": 4,
+        "decision_total": 6,
+        "row_exact": 4,
+        "row_total": 6,
+        "field_correct": 24,
+        "field_total": 36
+      },
+      "entity_resolution": {
+        "decision_correct": 5,
+        "decision_total": 9,
+        "row_exact": 5,
+        "row_total": 6,
+        "field_correct": 30,
+        "field_total": 36
+      },
+      "assignee_logic": {
+        "decision_correct": 4,
+        "decision_total": 6,
+        "row_exact": 4,
+        "row_total": 6,
+        "field_correct": 24,
+        "field_total": 36
+      },
+      "missing_field": {
+        "decision_correct": 4,
+        "decision_total": 4,
+        "row_exact": 0,
+        "row_total": 0,
+        "field_correct": 0,
+        "field_total": 0
+      },
+      "review_and_team": {
+        "decision_correct": 7,
+        "decision_total": 11,
+        "row_exact": 3,
+        "row_total": 10,
+        "field_correct": 41,
+        "field_total": 71
+      },
+      "multi_allocation": {
+        "decision_correct": 2,
+        "decision_total": 6,
+        "row_exact": 3,
+        "row_total": 6,
+        "field_correct": 36,
+        "field_total": 72
+      },
+      "invalid_time": {
+        "decision_correct": 1,
+        "decision_total": 2,
+        "row_exact": 0,
+        "row_total": 0,
+        "field_correct": 0,
+        "field_total": 0
+      },
+      "confirmation_flow": {
+        "decision_correct": 8,
+        "decision_total": 11,
+        "row_exact": 7,
+        "row_total": 9,
+        "field_correct": 45,
+        "field_total": 66
+      },
+      "noisy_input": {
+        "decision_correct": 6,
+        "decision_total": 6,
+        "row_exact": 4,
+        "row_total": 6,
+        "field_correct": 34,
+        "field_total": 36
+      },
+      "out_of_scope": {
+        "decision_correct": 3,
+        "decision_total": 3,
+        "row_exact": 2,
+        "row_total": 2,
+        "field_correct": 12,
+        "field_total": 12
+      }
+    }
+  },
+  "cases": {
+    "timefmt-002": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "timefmt-003": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 1,
+      "row_total": 2,
+      "field_correct": 6,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.4375
+    },
+    "timefmt-004": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "timefmt-005": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "timefmt-006": {
+      "decision_correct": 0,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "timefmt-007": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 0,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "reldate-003": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 1,
+      "row_total": 2,
+      "field_correct": 6,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.4375
+    },
+    "reldate-004": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 0,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "reldate-005": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "reldate-006": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 0,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "happy-002": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "happy-003": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 0,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "happy-004": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "entity-002": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "entity-003": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "entity-004": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 1,
+      "row_total": 2,
+      "field_correct": 6,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.4375
+    },
+    "entity-005": {
+      "decision_correct": 0,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "entity-006": {
+      "decision_correct": 0,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "entity-007": {
+      "decision_correct": 1,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "assignee-001": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "assignee-002": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 0,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "assignee-003": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "missing-002": {
+      "decision_correct": 1,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "missing-003": {
+      "decision_correct": 1,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "missing-004": {
+      "decision_correct": 1,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "missing-005": {
+      "decision_correct": 1,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "review-002": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 14,
+      "field_total": 16,
+      "api_errors": 0,
+      "score": 0.8
+    },
+    "review-003": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 0,
+      "field_total": 14,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "review-004": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 0,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "review-005": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 1,
+      "row_total": 2,
+      "field_correct": 13,
+      "field_total": 15,
+      "api_errors": 0,
+      "score": 0.8421
+    },
+    "review-006": {
+      "decision_correct": 1,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "review-007": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 14,
+      "field_total": 14,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "multi-003": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 1,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 24,
+      "api_errors": 0,
+      "score": 0.4643
+    },
+    "multi-004": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 24,
+      "field_total": 24,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "multi-005": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 0,
+      "field_total": 24,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "invtime-002": {
+      "decision_correct": 1,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "invtime-003": {
+      "decision_correct": 0,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 0.0
+    },
+    "confirm-002": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 1,
+      "row_total": 1,
+      "field_correct": 6,
+      "field_total": 6,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "confirm-003": {
+      "decision_correct": 3,
+      "decision_total": 3,
+      "row_exact": 3,
+      "row_total": 3,
+      "field_correct": 18,
+      "field_total": 18,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "confirm-004": {
+      "decision_correct": 3,
+      "decision_total": 4,
+      "row_exact": 3,
+      "row_total": 3,
+      "field_correct": 18,
+      "field_total": 18,
+      "api_errors": 0,
+      "score": 0.96
+    },
+    "confirm-005": {
+      "decision_correct": 0,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 3,
+      "field_total": 24,
+      "api_errors": 0,
+      "score": 0.1071
+    },
+    "noisy-001": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "noisy-002": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "noisy-003": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 0,
+      "row_total": 2,
+      "field_correct": 10,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 0.75
+    },
+    "oos-004": {
+      "decision_correct": 1,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "oos-005": {
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 12,
+      "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    }
+  }
+}
