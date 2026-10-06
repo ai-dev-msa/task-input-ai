@@ -8,9 +8,15 @@ import requests
 
 
 
-load_dotenv("./.env", override=True)
+load_dotenv("/var/www/html/msaai/.env", override=True)
 
 app = Flask(__name__)
+
+import sys
+sys.path.insert(0, "/var/www/html/msaai/ai-service/app")
+
+from modules.proyek import proyek_bp
+app.register_blueprint(proyek_bp)
 
 #cors ini buat nembak endpoint python ke mis
 CORS(
@@ -18,14 +24,18 @@ CORS(
     resources={
         r"/chat": {
             "origins": [
-                "https://appweb.co.id"
+                "https://appweb.mitrasinergi.co.id"
+            ]
+        },
+        r"/proyek": {
+            "origins": [
+                "https://appweb.mitrasinergi.co.id"
             ]
         }
     },
-    methods=["POST", "OPTIONS"],
+    methods=["GET","POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"]
 )
-
 #++VVVVVV Client OpenAI (DIHAPUS dari sini karena
 # kode AI track): client dibuat sendiri di src/alokasi_agent/llm.py
 # (complete()) dari OPENAI_API_KEY
@@ -103,7 +113,7 @@ def chat():
 
             #++VVVVVV TEST TOKEN ERP
             response_validate = requests.get(
-                "https://appweb.co.id/apiv1/auth/validate",
+                "https://appweb.mitrasinergi.co.id/msa/apiv1/auth/validate",
                 headers={
                     "Authorization": f"Bearer {token}"
                 },
@@ -119,7 +129,7 @@ def chat():
             results = []
             for row in rows:
                 response_ci3 = requests.post(
-                    "https://appweb.co.id/apiv1/aialokasiharian/createAlokasi",
+                    "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/createAlokasi",
                     json=row,
                     headers={
                         "Authorization": f"Bearer {token}",
@@ -177,7 +187,7 @@ def get_erp_token():
         raise Exception("ERP_API_USERNAME / ERP_API_PASSWORD belum tersedia")
 
     response_login = requests.post(
-        "https://appweb.co.id/apiv1/auth/login",
+        "https://appweb.mitrasinergi.co.id/msa/apiv1/auth/login",
         data={
             "username": username,
             "password": password
