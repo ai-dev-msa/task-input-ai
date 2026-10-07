@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import difflib
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
@@ -31,6 +32,40 @@ def _validate_calls(calls: list[dict[str, Any]]) -> dict[str, list[str]]:
         tc.get("id", ""): validate_arguments(tc["function"].get("arguments", ""))
         for tc in calls
     }
+
+
+def _project_problem(
+    calls: list[dict[str, Any]], projects: Sequence[str]
+) -> str | None:
+    """Hard list check: every row's nama_proyek must exist in `projects`.
+
+    Trim + case-insensitive match. Returns the user-facing question when some
+    row's project is unknown, else None. Empty list means "no list to check
+    against", so the check is skipped.
+    """
+    if not projects:
+        return None
+    canonical: dict[str, str] = {}
+    for name in projects:
+        canonical.setdefault(name.strip().casefold(), name)
+    lines: list[str] = []
+    for tc in calls:
+        args = json.loads(tc["function"].get("arguments", ""))
+        value = str(args.get("nama_proyek", "")).strip()
+        if value.casefold() in canonical:
+            continue
+        candidates = difflib.get_close_matches(
+            value, list(canonical.values()), n=3, cutoff=0.5
+        )
+        if candidates:
+            lines.append(
+                f'Maksud kamu "{value}"? Kandidat: {", ".join(candidates)}'
+            )
+        else:
+            lines.append(
+                f'Maksud kamu "{value}"? Tidak ada proyek yang mirip di daftar proyek.'
+            )
+    return " ".join(lines) or None
 
 
 def run(
@@ -85,6 +120,8 @@ def run(
         calls = _alokasi_calls(message)
         errors_by_id = _validate_calls(calls)
 
+    project_question = _project_problem(calls, projects) if calls else None
+
     if any(errors_by_id.values()):
         # Still malformed after the retry: refuse instead of sending a partial call.
         errors = [
@@ -101,6 +138,18 @@ def run(
             "reply": reason,
         }
         history_content: str = reason
+    elif project_question:
+        # List miss: ask instead of writing (never a function_call).
+        envelope = {
+            "success": True,
+            "type": "text",
+            "function_name": "",
+            "arguments": "",
+            "raw_message": raw_message,
+            "user_id": user_id,
+            "reply": project_question,
+        }
+        history_content = project_question
     elif calls:
         # One row keeps the model's object string (PRD sample shape unchanged);
         # several rows become a JSON array string the backend iterates (FR-08).

@@ -351,3 +351,48 @@ def test_partial_message_then_answer_produces_complete_call():
     assert sent[2]["content"] == question
     assert sent[3]["content"] == answer
     assert [turn["role"] for turn in history2] == ["user", "assistant", "user", "assistant"]
+
+
+# --- project list validation (server-fetched lists) ---
+
+def test_unknown_project_becomes_question_not_call():
+    args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "OPRS WIN")
+    calls = []
+    env, history = call_run(make_stub([tool_reply(arguments=args)], calls))
+    assert env["success"] is True
+    assert env["type"] == "text"
+    assert env["function_name"] == ""
+    assert env["arguments"] == ""
+    assert 'Maksud kamu "OPRS WIN"?' in env["reply"]
+    assert "OPRS Divisi WIN 2026" in env["reply"]
+    assert len(calls) == 1  # list misses are not retried
+    assert history[-1]["content"] == env["reply"]
+
+
+def test_unknown_project_blocks_whole_batch():
+    bad = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "Proyek Fiktif")
+    calls = []
+    env, _ = call_run(make_stub([tool_reply_multi([SAMPLE_ARGUMENTS, bad])], calls))
+    assert env["type"] == "text"
+    assert 'Maksud kamu "Proyek Fiktif"?' in env["reply"]
+    assert len(calls) == 1
+
+
+def test_project_match_ignores_case_and_padding():
+    args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "  oprs divisi win 2026 ")
+    env, _ = call_run(make_stub([tool_reply(arguments=args)], []))
+    assert env["type"] == "function_call"
+
+
+def test_empty_projects_list_skips_check():
+    args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "Anything At All")
+    env, _ = call_run(make_stub([tool_reply(arguments=args)], []), projects=[])
+    assert env["type"] == "function_call"
+
+
+def test_no_close_candidate_still_asks():
+    args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "zzz qqq")
+    env, _ = call_run(make_stub([tool_reply(arguments=args)], []))
+    assert env["type"] == "text"
+    assert 'Maksud kamu "zzz qqq"?' in env["reply"]
+    assert "Kandidat:" not in env["reply"]
