@@ -4,7 +4,10 @@ from dotenv import load_dotenv
 from alokasi_agent import run
 import json
 import os
+import time
 import requests
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 
@@ -15,8 +18,68 @@ app = Flask(__name__)
 import sys
 sys.path.insert(0, "/var/www/html/msaai/ai-service/app")
 
-from modules.proyek import proyek_bp
+from modules.proyek import proyek_bp, controller
 app.register_blueprint(proyek_bp)
+
+# Satu TTL untuk cache proyek & token ERP (detik).
+CACHE_TTL = float(os.getenv("ALOKASI_CACHE_TTL", "300"))
+_cache = {}
+
+
+def _cache_get(key):
+    hit = _cache.get(key)
+    if hit and time.monotonic() < hit[1]:
+        return hit[0]
+    return None
+
+
+def _cache_set(key, value):
+    _cache[key] = (value, time.monotonic() + CACHE_TTL)
+
+
+def _names_from(data):
+    """Ambil nama proyek dari response MIS: string dipakai apa adanya,
+    dict dicoba lewat key nama yang umum, sisanya dilewati."""
+    if isinstance(data, dict):
+        data = data.get("data") or data.get("hasil") or []
+    names = []
+    for item in data or []:
+        if isinstance(item, str) and item.strip():
+            names.append(item)
+        elif isinstance(item, dict):
+            for key in ("nama", "name", "nama_proyek"):
+                if item.get(key):
+                    names.append(str(item[key]))
+                    break
+    return names
+
+
+def get_projects():
+    """Daftar proyek MSA+WIN tahun berjalan, digabung dan di-cache.
+    Kalau gagal, kembalikan [] dan biarkan /chat pakai projects dari body."""
+    cached = _cache_get("projects")
+    if cached is not None:
+        return cached
+    names = []
+    try:
+        token = get_erp_token()
+        tahun = str(datetime.now(ZoneInfo("Asia/Jakarta")).year)
+        for fetch in (controller.getProyekMSAByYear, controller.getProyekWINByYear):
+            response, status = fetch(tahun, token)
+            if status == 200:
+                names += _names_from(response.get_json().get("data"))
+    except Exception as exc:
+        print("get_projects gagal:", repr(exc))
+    # Dedupe case-insensitive, urutan pertama dipertahankan.
+    seen = set()
+    merged = []
+    for name in names:
+        key = name.strip().casefold()
+        if key not in seen:
+            seen.add(key)
+            merged.append(name.strip())
+    _cache_set("projects", merged)
+    return merged
 
 #cors ini buat nembak endpoint python ke mis
 CORS(
@@ -84,11 +147,13 @@ def chat():
 
         # 1) All AI logic lives in run(). It returns (envelope, history);
         #    the envelope already contains reply + history.
+        # Proyek dari endpoint server (cached); body hanya fallback.
+        projects = get_projects() or (data.get("projects") or [])
         envelope, _history = run(
             user_message,
             user_name=data.get("user_name") or "",
             employees=data.get("employees") or [],
-            projects=data.get("projects") or [],
+            projects=projects,
             history=data.get("history") or [],
             user_id=user_id,
         )
@@ -179,6 +244,9 @@ def chat():
 
 #buat login otomatis ke mis biar langsung dapetin tokennya 
 def get_erp_token():
+    cached = _cache_get("erp_token")
+    if cached is not None:
+        return cached
 
     username = os.getenv("ERP_API_USERNAME")
     password = os.getenv("ERP_API_PASSWORD")
@@ -230,6 +298,7 @@ def get_erp_token():
         )
     #//++VVVVVV
 
+    _cache_set("erp_token", token)
     return token
 
 #ini buat kalau server mati/venv ga jalan biar gausah debug/gausah nampilin eror
