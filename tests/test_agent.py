@@ -396,3 +396,15 @@ def test_no_close_candidate_still_asks():
     assert env["type"] == "text"
     assert 'Maksud kamu "zzz qqq"?' in env["reply"]
     assert "Kandidat:" not in env["reply"]
+
+
+def test_post_retry_invalid_json_still_refuses():
+    calls = []
+    stub = make_stub(
+        [tool_reply(arguments=INVALID_ARGUMENTS), tool_reply(arguments="not json")],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["type"] == "error"
+    assert env["reply"].startswith("Data tidak valid setelah dicoba ulang:")
+    assert len(calls) == 2

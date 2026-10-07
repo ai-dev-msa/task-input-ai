@@ -120,8 +120,6 @@ def run(
         calls = _alokasi_calls(message)
         errors_by_id = _validate_calls(calls)
 
-    project_question = _project_problem(calls, projects) if calls else None
-
     if any(errors_by_id.values()):
         # Still malformed after the retry: refuse instead of sending a partial call.
         errors = [
@@ -138,7 +136,7 @@ def run(
             "reply": reason,
         }
         history_content: str = reason
-    elif project_question:
+    elif calls and (project_question := _project_problem(calls, projects)):
         # List miss: ask instead of writing (never a function_call).
         envelope = {
             "success": True,
