@@ -120,3 +120,10 @@ def test_placeholder_in_value_not_reexpanded():
 def test_template_contains_all_placeholders():
     for token in ("{{now_wib}}", "{{current_user_name}}", "{{employee_list}}", "{{project_list}}"):
         assert token in PROMPT_TEMPLATE
+
+
+def test_static_and_lists_precede_volatile_values():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert out.index("Success means:") < out.index("Valid employees:")
+    assert out.index("Valid employees:") < out.index("Current date and time")
+    assert out.index("Valid projects:") < out.index("Logged-in user:")
