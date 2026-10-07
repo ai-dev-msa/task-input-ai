@@ -57,14 +57,14 @@ def _project_problem(
         candidates = difflib.get_close_matches(
             value, list(canonical.values()), n=3, cutoff=0.5
         )
-        if candidates:
+        if len(candidates) == 1:
+            lines.append(f'Maksud kamu "{candidates[0]}"?')
+        elif candidates:
             lines.append(
-                f'Maksud kamu "{value}"? Kandidat: {", ".join(candidates)}'
+                f'Proyek "{value}" tidak ada. Pilih: {", ".join(candidates)}'
             )
         else:
-            lines.append(
-                f'Maksud kamu "{value}"? Tidak ada proyek yang mirip di daftar proyek.'
-            )
+            lines.append(f'Proyek "{value}" tidak ada di daftar proyek.')
     return " ".join(lines) or None
 
 

@@ -363,7 +363,7 @@ def test_unknown_project_becomes_question_not_call():
     assert env["type"] == "text"
     assert env["function_name"] == ""
     assert env["arguments"] == ""
-    assert 'Maksud kamu "OPRS WIN"?' in env["reply"]
+    assert env["reply"] == 'Maksud kamu "OPRS Divisi WIN 2026"?'
     assert "OPRS Divisi WIN 2026" in env["reply"]
     assert len(calls) == 1  # list misses are not retried
     assert history[-1]["content"] == env["reply"]
@@ -374,7 +374,7 @@ def test_unknown_project_blocks_whole_batch():
     calls = []
     env, _ = call_run(make_stub([tool_reply_multi([SAMPLE_ARGUMENTS, bad])], calls))
     assert env["type"] == "text"
-    assert 'Maksud kamu "Proyek Fiktif"?' in env["reply"]
+    assert env["reply"] == 'Proyek "Proyek Fiktif" tidak ada di daftar proyek.'
     assert len(calls) == 1
 
 
@@ -394,8 +394,19 @@ def test_no_close_candidate_still_asks():
     args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "zzz qqq")
     env, _ = call_run(make_stub([tool_reply(arguments=args)], []))
     assert env["type"] == "text"
-    assert 'Maksud kamu "zzz qqq"?' in env["reply"]
+    assert env["reply"] == 'Proyek "zzz qqq" tidak ada di daftar proyek.'
     assert "Kandidat:" not in env["reply"]
+
+
+def test_multiple_candidates_offer_a_choice():
+    args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "OPRS Divisi")
+    projects = ["OPRS Divisi IT 2026", "OPRS Divisi HRD 2026", "OPRS Divisi WIN 2026"]
+    env, _ = call_run(make_stub([tool_reply(arguments=args)], []), projects=projects)
+    assert env["type"] == "text"
+    assert env["reply"].startswith('Proyek "OPRS Divisi" tidak ada. Pilih:')
+    assert "OPRS Divisi IT 2026" in env["reply"]
+    assert "OPRS Divisi HRD 2026" in env["reply"]
+    assert "Maksud kamu" not in env["reply"]
 
 
 def test_post_retry_invalid_json_still_refuses():
