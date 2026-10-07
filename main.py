@@ -18,7 +18,7 @@ app = Flask(__name__)
 import sys
 sys.path.insert(0, "/var/www/html/msaai/ai-service/app")
 
-from modules.proyek import proyek_bp, controller
+from modules.proyek import proyek_bp
 app.register_blueprint(proyek_bp)
 
 # Satu TTL untuk cache proyek & token ERP (detik).
@@ -160,7 +160,7 @@ def chat():
             user_message,
             user_name=data.get("user_name") or "",
             employees=data.get("employees") or [],
-            projects=projects,
+            projects=data.get("projects") or [],
             history=data.get("history") or [],
             user_id=user_id,
         )
