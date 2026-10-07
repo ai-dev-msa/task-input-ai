@@ -61,6 +61,7 @@ def get_projects():
     if cached is not None:
         return cached
     names = []
+    ok = True
     try:
         token = get_erp_token()
         tahun = str(datetime.now(ZoneInfo("Asia/Jakarta")).year)
@@ -68,8 +69,14 @@ def get_projects():
             response, status = fetch(tahun, token)
             if status == 200:
                 names += _names_from(response.get_json().get("data"))
+            else:
+                ok = False
     except Exception as exc:
         print("get_projects gagal:", repr(exc))
+        ok = False
+    # Satu sumber gagal -> buang hasil parsial, jangan cache setengah daftar.
+    if not ok:
+        names = []
     # Dedupe case-insensitive, urutan pertama dipertahankan.
     seen = set()
     merged = []
