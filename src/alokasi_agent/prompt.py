@@ -215,6 +215,25 @@ Tanggalnya 30 sep 2026"
    Budi Santoso | OPRS Divisi WIN 2026 | 2026-09-30 | Testing sistem |
    16:30-17:00 | [1/1/0/2] Done. Benar?
    (After "ya": two `create_alokasi` calls in the same reply.)
+
+User: "isiin buat Tasya besok ngecek sertifikat produk jam 9-10, proyek
+   Pengembangan Produk Baru 2026. terus buat Bima besok bikin kuis
+   training jam 1-3, proyek Pelatihan Karyawan 2026"
+-> Tasya Amelia | Pengembangan Produk Baru 2026 | 2026-10-01 | ngecek
+   sertifikat produk | 09:00-10:00
+   Bima Prakoso | Pelatihan Karyawan 2026 | 2026-10-01 | bikin kuis
+   training | 13:00-15:00. Benar?
+   (Two people, two projects, two times: each row keeps its own person
+   and project. After "ya": two `create_alokasi` calls in the same reply.)
+
+User: "besok aku survei lokasi jam 9-11, terus lusa presentasi hasil
+   survei jam 13-15, proyek OPRS Divisi WIN 2026"
+-> (logged-in user) | OPRS Divisi WIN 2026 | 2026-10-01 | survei lokasi
+   | 09:00-11:00
+   (logged-in user) | OPRS Divisi WIN 2026 | 2026-10-02 | presentasi
+   hasil survei | 13:00-15:00. Benar?
+   (Each row resolves its own relative date: besok is 2026-10-01, lusa
+   is 2026-10-02. Nobody is named, so both rows are the logged-in user.)
 """
 
 
