@@ -60,7 +60,7 @@ CREATE_ALOKASI_TOOL = {
                 "type": "string",
             },
             "nama_proyek": {
-                "description": "Nama proyek, contoh: OPRS Divisi WIN 2026",
+                "description": "Nama proyek, contoh: Penyusunan SOP Perusahaan 2026",
                 "minLength": 1,
                 "title": "Nama Proyek",
                 "type": "string",

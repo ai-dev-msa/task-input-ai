@@ -341,10 +341,10 @@ def test_aggregate_empty_is_none_not_crash():
 # --- dataset integrity ---
 
 
-def test_dataset_has_46_cases_with_unique_ids():
+def test_dataset_has_47_cases_with_unique_ids():
     cases = load_cases(CASES_PATH)
-    assert len(cases) == 46
-    assert len({case["id"] for case in cases}) == 46
+    assert len(cases) == 47
+    assert len({case["id"] for case in cases}) == 47
 
 
 def test_dataset_kind_and_split_counts():
@@ -355,12 +355,12 @@ def test_dataset_kind_and_split_counts():
     assert dict(kinds) == {
         "confirm": 35,
         "call": 33,
-        "ask": 12,
+        "ask": 13,
         "drop_review": 1,
         "cancel": 1,
         "refuse": 1,
     }
-    assert dict(Counter(case["split"] for case in cases)) == {"dev": 34, "test": 12}
+    assert dict(Counter(case["split"] for case in cases)) == {"dev": 35, "test": 12}
 
 
 def test_every_case_fixture_resolves():

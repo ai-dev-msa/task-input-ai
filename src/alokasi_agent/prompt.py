@@ -184,42 +184,42 @@ User: "ganti jam selesai jadi 13:00"
 User: "besok aku ngerjain modul PPN jam 1 sampai jam 4"
 -> (project missing) "Untuk proyek apa alokasi ini?"
 
-User: "Tambahin Budi besok pagi meeting client"
--> (two employees match "Budi", time incomplete) "Budi yang mana: Budi
-   Santoso atau Budi Hartono? Dan jam berapa mulai dan selesainya?"
+User: "Tambahin Rizka besok pagi meeting client"
+-> (two employees match "Rizka", time incomplete) "Rizka yang mana: Rizka
+   Amelia atau Rizka Putri? Dan jam berapa mulai dan selesainya?"
 
-User: "besok aku rapat tim jam 10-12, proyek OPRS Divisi WIN 2026"
--> (logged-in user) | OPRS Divisi WIN 2026 | (besok) | rapat tim |
+User: "besok aku rapat tim jam 10-12, proyek Review Kontrak Vendor 2026"
+-> (logged-in user) | Review Kontrak Vendor 2026 | (besok) | rapat tim |
    10:00-12:00. Benar?
    (Nobody is named, so it is the logged-in user. No question asked.)
 
-User: "buat Imam Ihsani hari ini dokumentasi rilis jam 14.00-15.30,
-   proyek oprs divisi win 2026"
--> Imam Ihsani | OPRS Divisi WIN 2026 | (today) | dokumentasi rilis |
-   14:00-15:30. Benar?
+User: "buat Fajar Nugroho hari ini dokumentasi rilis jam 14.00-15.30,
+   proyek riset pasar segmen muda 2026"
+-> Fajar Nugroho | Riset Pasar Segmen Muda 2026 | (today) | dokumentasi
+   rilis | 14:00-15:30. Benar?
    (Lowercase project fixed to the one list match. No question asked.)
 
-User: "hari ini dev PPN jam 9-12 proyek OPRS Divisi WIN 2026, review
-[1/1/1/0] Done, tim Bimo Aditya sama Janie Natalie"
--> (logged-in user) | OPRS Divisi WIN 2026 | (today) | Development Modul
-   PPN | 09:00-12:00 | [1/1/1/0] Done | Bimo Aditya Pangestu, Janie
-   Natalie. Benar?
+User: "hari ini stress test aplikasi jam 9-12, proyek Pengembangan Produk
+Baru 2026, review [1/1/1/0] Done, tim Eko sama Mega"
+-> (logged-in user) | Pengembangan Produk Baru 2026 | (today) | stress
+   test aplikasi | 09:00-12:00 | [1/1/1/0] Done | Eko Prasetyo, Mega
+   Puspita. Benar?
 
-User: "isiin alokasi buat Dimas Eka Priyadi dan Budi Santoso dengan proyek
-oprs divisi win 2026. Dimas Eka Priyadi kerjannya '[1/1/0/1] Tes prompting
-AI' dari jam 16 sampai 16.30, udah done 100%. Budi Santoso kerjannya
-'[1/1/0/2] Testing sistem' dari jam 16.30 sampai 17.00, udah done 100%.
-Tanggalnya 30 sep 2026"
--> Dimas Eka Priyadi | OPRS Divisi WIN 2026 | 2026-09-30 | Tes prompting
-   AI | 16:00-16:30 | [1/1/0/1] Done
-   Budi Santoso | OPRS Divisi WIN 2026 | 2026-09-30 | Testing sistem |
-   16:30-17:00 | [1/1/0/2] Done. Benar?
+User: "isiin alokasi buat Sinta Maulida dan Raden Mahesa dengan proyek
+Migrasi Server Cloud 2026. Sinta Maulida kerjannya '[1/1/0/1] Verifikasi
+laporan kas' dari jam 16 sampai 16.30, udah done 100%. Raden Mahesa
+kerjannya '[1/1/0/2] Rekap mutu supplier' dari jam 16.30 sampai 17.00,
+udah done 100%. Tanggalnya 30 sep 2026"
+-> Sinta Maulida | Migrasi Server Cloud 2026 | 2026-09-30 | Verifikasi
+   laporan kas | 16:00-16:30 | [1/1/0/1] Done
+   Raden Mahesa | Migrasi Server Cloud 2026 | 2026-09-30 | Rekap mutu
+   supplier | 16:30-17:00 | [1/1/0/2] Done. Benar?
    (After "ya": two `create_alokasi` calls in the same reply.)
 
 User: "isiin buat Tasya besok ngecek sertifikat produk jam 9-10, proyek
-   Pengembangan Produk Baru 2026. terus buat Bima besok bikin kuis
+   Kampanye Peluncuran Produk Q4 2026. terus buat Bima besok bikin kuis
    training jam 1-3, proyek Pelatihan Karyawan 2026"
--> Tasya Amelia | Pengembangan Produk Baru 2026 | 2026-10-01 | ngecek
+-> Tasya Amelia | Kampanye Peluncuran Produk Q4 2026 | 2026-10-01 | ngecek
    sertifikat produk | 09:00-10:00
    Bima Prakoso | Pelatihan Karyawan 2026 | 2026-10-01 | bikin kuis
    training | 13:00-15:00. Benar?
@@ -227,10 +227,10 @@ User: "isiin buat Tasya besok ngecek sertifikat produk jam 9-10, proyek
    and project. After "ya": two `create_alokasi` calls in the same reply.)
 
 User: "besok aku survei lokasi jam 9-11, terus lusa presentasi hasil
-   survei jam 13-15, proyek OPRS Divisi WIN 2026"
--> (logged-in user) | OPRS Divisi WIN 2026 | 2026-10-01 | survei lokasi
+   survei jam 13-15, proyek Audit Mutu ISO 2026"
+-> (logged-in user) | Audit Mutu ISO 2026 | 2026-10-01 | survei lokasi
    | 09:00-11:00
-   (logged-in user) | OPRS Divisi WIN 2026 | 2026-10-02 | presentasi
+   (logged-in user) | Audit Mutu ISO 2026 | 2026-10-02 | presentasi
    hasil survei | 13:00-15:00. Benar?
    (Each row resolves its own relative date: besok is 2026-10-01, lusa
    is 2026-10-02. Nobody is named, so both rows are the logged-in user.)

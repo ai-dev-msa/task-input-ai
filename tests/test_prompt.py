@@ -68,7 +68,7 @@ def test_rule_markers_present():
     assert "show the full summary line again with the new value" in out
     # FR-09: entity resolution is prompt-only (caller-injected lists, no DB)
     assert "exactly one employee fits" in out
-    assert "Budi yang mana" in out
+    assert "Rizka yang mana" in out
     assert "Never invent or abbreviate" in out
 
 
@@ -97,7 +97,7 @@ def test_multi_row_rules_present():
     assert "all calls\n   in the same reply" in out
     assert "independently from the current WIB date" in out
     assert "two `create_alokasi` calls in the same reply" in out
-    assert "Dimas Eka Priyadi | OPRS Divisi WIN 2026 | 2026-09-30" in out
+    assert "Sinta Maulida | Migrasi Server Cloud 2026 | 2026-09-30" in out
 
 
 def test_non_utc_aware_datetime():

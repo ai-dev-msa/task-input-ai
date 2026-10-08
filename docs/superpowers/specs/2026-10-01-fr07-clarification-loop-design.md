@@ -10,7 +10,7 @@
 The behavior already exists from delivered work:
 
 - **Detect missing/ambiguous fields → ask, don't call**: prompt instruction #4
-  plus examples 2–3 ("Untuk proyek apa alokasi ini?", "Budi yang mana...").
+  plus examples 2–3 ("Untuk proyek apa alokasi ini?", "Rizka yang mana...").
 - **Short conversation state**: `run()` history threading (FR-04).
 - **Merge the answer**: the model combines the answer with history; FR-05
   rejects any incomplete tool call as a safety net (model then asks instead —
