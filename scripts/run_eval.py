@@ -32,7 +32,9 @@ from alokasi_agent.eval import (
     load_cases,
     load_fixture,
     score_turn,
+    sum_usage,
 )
+from alokasi_agent.llm import complete as default_complete
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES_PATH = ROOT / "eval" / "cases.jsonl"
@@ -51,6 +53,14 @@ HEADLINE = (
 )
 # The poem in this reply cannot be caught by substring checks — read it.
 MANUAL_CHECK_ID = "oos-005"
+# (label, metric key) pairs printed in the Tokens block.
+TOKEN_KEYS = (
+    ("prompt tokens", "prompt_tokens"),
+    ("completion tokens", "completion_tokens"),
+    ("cached prompt tokens", "cached_tokens"),
+    ("total tokens", "total_tokens"),
+    ("llm calls", "llm_calls"),
+)
 
 
 def fmt(value: float | None) -> str:
@@ -110,6 +120,15 @@ def print_report(
                 line += f" (baseline {fmt(old)}, delta {metrics[key] - old:+.3f})"
         print(line)
     print(f"  {'api errors':<23}: {metrics['api_error_count']}")
+
+    print("\nTokens")
+    for label, key in TOKEN_KEYS:
+        line = f"  {label:<23}: {metrics.get(key, 0)}"
+        if baseline:
+            old = baseline.get("metrics", {}).get(key)
+            if old is not None:
+                line += f" (baseline {old}, delta {metrics[key] - old:+d})"
+        print(line)
 
     if baseline:
         old_cases = baseline.get("cases", {})
@@ -204,6 +223,14 @@ def main() -> int:
     manual_replies: list[tuple[int, Any]] = []
     api_errors = 0
 
+    usage_rows: list[dict[str, Any]] = []
+
+    def counting_complete(messages, tools=None):
+        # Record every API call's usage (an FR-05 retry = two rows).
+        response = default_complete(messages, tools=tools)
+        usage_rows.append(response.get("usage") or {})
+        return response
+
     for number, (case, now, fixture) in enumerate(prepared, start=1):
         print(f"[{number}/{len(prepared)}] {case['id']}")
         history: list[dict[str, Any]] | None = None
@@ -218,6 +245,7 @@ def main() -> int:
                     projects=fixture["projects"],
                     history=history,
                     now=now,
+                    complete=counting_complete,
                 )
             except Exception as error:  # API hiccup: count it, drop this case
                 api_errors += 1
@@ -245,6 +273,8 @@ def main() -> int:
         case_results[case["id"]] = summarize_case(scores, case_errors)
 
     metrics = aggregate(all_scores, api_errors)
+    metrics.update(sum_usage(usage_rows))
+    metrics["llm_calls"] = len(usage_rows)
     print()
     print_report(
         metrics, case_results, failures, manual_replies, len(prepared), len(all_scores)

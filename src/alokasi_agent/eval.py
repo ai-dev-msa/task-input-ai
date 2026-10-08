@@ -271,3 +271,24 @@ def aggregate(
         metrics["optional_correct"], metrics["optional_total"]
     )
     return metrics
+
+
+def sum_usage(usage_rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Totals over the usage dict of every API call in a run.
+
+    A row may be {} when the API omitted usage entirely, and
+    prompt_tokens_details may be absent or null.
+    """
+    totals = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "cached_tokens": 0,
+    }
+    for row in usage_rows:
+        totals["prompt_tokens"] += int(row.get("prompt_tokens") or 0)
+        totals["completion_tokens"] += int(row.get("completion_tokens") or 0)
+        totals["total_tokens"] += int(row.get("total_tokens") or 0)
+        details = row.get("prompt_tokens_details") or {}
+        totals["cached_tokens"] += int(details.get("cached_tokens") or 0)
+    return totals

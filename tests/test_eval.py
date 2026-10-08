@@ -10,6 +10,7 @@ from alokasi_agent.eval import (
     load_fixture,
     parse_summary,
     score_turn,
+    sum_usage,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -386,3 +387,51 @@ def test_forbidden_matches_nothing_in_fixture():
             assert not [name for name in names if name.startswith(prefix)]
         else:
             assert not [name for name in names if entry in name]
+
+
+# --- sum_usage ---
+
+
+def test_sum_usage_empty_rows():
+    assert sum_usage([]) == {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "cached_tokens": 0,
+    }
+
+
+def test_sum_usage_sums_every_call():
+    rows = [
+        {
+            "prompt_tokens": 100,
+            "completion_tokens": 10,
+            "total_tokens": 110,
+            "prompt_tokens_details": {"cached_tokens": 80},
+        },
+        {"prompt_tokens": 50, "completion_tokens": 5, "total_tokens": 55},
+    ]
+    assert sum_usage(rows) == {
+        "prompt_tokens": 150,
+        "completion_tokens": 15,
+        "total_tokens": 165,
+        "cached_tokens": 80,
+    }
+
+
+def test_sum_usage_tolerates_missing_usage_fields():
+    rows = [
+        {},
+        {
+            "prompt_tokens": 7,
+            "completion_tokens": 1,
+            "total_tokens": 8,
+            "prompt_tokens_details": None,
+        },
+    ]
+    assert sum_usage(rows) == {
+        "prompt_tokens": 7,
+        "completion_tokens": 1,
+        "total_tokens": 8,
+        "cached_tokens": 0,
+    }
