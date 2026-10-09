@@ -18,8 +18,12 @@ app = Flask(__name__)
 import sys
 sys.path.insert(0, "/var/www/html/msaai/ai-service/app")
 
-from modules.proyek import proyek_bp
+from modules.proyek import proyek_bp, controller
 app.register_blueprint(proyek_bp)
+
+from modules.karyawan import karyawan_bp
+from modules.karyawan.routes import controller as karyawan_controller
+app.register_blueprint(karyawan_bp)
 
 # Satu TTL untuk cache proyek & token ERP (detik).
 CACHE_TTL = float(os.getenv("ALOKASI_CACHE_TTL", "300"))
@@ -88,6 +92,32 @@ def get_projects():
     _cache_set("projects", merged)
     return merged
 
+
+def get_employees():
+    """Daftar karyawan aktif dari MIS, di-cache.
+    Kalau gagal, kembalikan [] dan biarkan /chat pakai employees dari body."""
+    cached = _cache_get("employees")
+    if cached is not None:
+        return cached
+    names = []
+    try:
+        token = get_erp_token()
+        response, status = karyawan_controller.getListKaryawanAktif(token)
+        if status == 200:
+            names = _names_from(response.get_json().get("data"))
+    except Exception as exc:
+        print("get_employees gagal:", repr(exc))
+    # Dedupe case-insensitive, urutan pertama dipertahankan.
+    seen = set()
+    merged = []
+    for name in names:
+        key = name.strip().casefold()
+        if key not in seen:
+            seen.add(key)
+            merged.append(name.strip())
+    _cache_set("employees", merged)
+    return merged
+
 #cors ini buat nembak endpoint python ke mis
 CORS(
     app,
@@ -154,13 +184,14 @@ def chat():
 
         # 1) All AI logic lives in run(). It returns (envelope, history);
         #    the envelope already contains reply + history.
-        # Proyek dari endpoint server (cached); body hanya fallback.
+        # Proyek & karyawan dari endpoint server (cached); body hanya fallback.
         projects = get_projects() or (data.get("projects") or [])
+        employees = get_employees() or (data.get("employees") or [])
         envelope, _history = run(
             user_message,
             user_name=data.get("user_name") or "",
-            employees=data.get("employees") or [],
-            projects=data.get("projects") or [],
+            employees=employees,
+            projects=projects,
             history=data.get("history") or [],
             user_id=user_id,
         )

@@ -419,3 +419,58 @@ def test_post_retry_invalid_json_still_refuses():
     assert env["type"] == "error"
     assert env["reply"].startswith("Data tidak valid setelah dicoba ulang:")
     assert len(calls) == 2
+
+
+# --- employee list validation (server-fetched lists) ---
+
+def test_unknown_employee_becomes_question_not_call():
+    args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Imam")
+    calls = []
+    env, history = call_run(make_stub([tool_reply(arguments=args)], calls))
+    assert env["success"] is True
+    assert env["type"] == "text"
+    assert env["function_name"] == ""
+    assert env["arguments"] == ""
+    assert env["reply"] == 'Maksud kamu "Imam Ihsani"?'
+    assert len(calls) == 1  # list misses are not retried
+    assert history[-1]["content"] == env["reply"]
+
+
+def test_unknown_employee_blocks_whole_batch():
+    bad = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Karyawan Fiktif")
+    calls = []
+    env, _ = call_run(make_stub([tool_reply_multi([SAMPLE_ARGUMENTS, bad])], calls))
+    assert env["type"] == "text"
+    assert env["reply"] == 'Karyawan "Karyawan Fiktif" tidak ada di daftar karyawan.'
+    assert len(calls) == 1
+
+
+def test_employee_match_ignores_case_and_padding():
+    args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "  imam ihsani ")
+    env, _ = call_run(make_stub([tool_reply(arguments=args)], []))
+    assert env["type"] == "function_call"
+
+
+def test_empty_employees_list_skips_check():
+    args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Anyone At All")
+    env, _ = call_run(make_stub([tool_reply(arguments=args)], []), employees=[])
+    assert env["type"] == "function_call"
+
+
+def test_unknown_employee_no_close_candidate_still_asks():
+    args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "zzz qqq")
+    env, _ = call_run(make_stub([tool_reply(arguments=args)], []))
+    assert env["type"] == "text"
+    assert env["reply"] == 'Karyawan "zzz qqq" tidak ada di daftar karyawan.'
+    assert "Kandidat:" not in env["reply"]
+
+
+def test_unknown_employee_multiple_candidates_offer_a_choice():
+    args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Imam")
+    employees = ["Imam Ihsani", "Imam Hidayat"]
+    env, _ = call_run(make_stub([tool_reply(arguments=args)], []), employees=employees)
+    assert env["type"] == "text"
+    assert env["reply"].startswith('Karyawan "Imam" tidak ada. Pilih:')
+    assert "Imam Ihsani" in env["reply"]
+    assert "Imam Hidayat" in env["reply"]
+    assert "Maksud kamu" not in env["reply"]

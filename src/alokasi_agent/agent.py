@@ -68,6 +68,40 @@ def _project_problem(
     return " ".join(lines) or None
 
 
+def _employee_problem(
+    calls: list[dict[str, Any]], employees: Sequence[str]
+) -> str | None:
+    """Hard list check: every row's nama_karyawan must exist in `employees`.
+
+    Trim + case-insensitive match. Returns the user-facing question when some
+    row's employee is unknown, else None. Empty list means "no list to check
+    against", so the check is skipped.
+    """
+    if not employees:
+        return None
+    canonical: dict[str, str] = {}
+    for name in employees:
+        canonical.setdefault(name.strip().casefold(), name)
+    lines: list[str] = []
+    for tc in calls:
+        args = json.loads(tc["function"].get("arguments", ""))
+        value = str(args.get("nama_karyawan", "")).strip()
+        if value.casefold() in canonical:
+            continue
+        candidates = difflib.get_close_matches(
+            value, list(canonical.values()), n=3, cutoff=0.5
+        )
+        if len(candidates) == 1:
+            lines.append(f'Maksud kamu "{candidates[0]}"?')
+        elif candidates:
+            lines.append(
+                f'Karyawan "{value}" tidak ada. Pilih: {", ".join(candidates)}'
+            )
+        else:
+            lines.append(f'Karyawan "{value}" tidak ada di daftar karyawan.')
+    return " ".join(lines) or None
+
+
 def run(
     raw_message: str,
     *,
@@ -136,6 +170,18 @@ def run(
             "reply": reason,
         }
         history_content: str = reason
+    elif calls and (employee_question := _employee_problem(calls, employees)):
+        # List miss: ask instead of writing (never a function_call).
+        envelope = {
+            "success": True,
+            "type": "text",
+            "function_name": "",
+            "arguments": "",
+            "raw_message": raw_message,
+            "user_id": user_id,
+            "reply": employee_question,
+        }
+        history_content = employee_question
     elif calls and (project_question := _project_problem(calls, projects)):
         # List miss: ask instead of writing (never a function_call).
         envelope = {
