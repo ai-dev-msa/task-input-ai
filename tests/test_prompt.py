@@ -45,7 +45,7 @@ def test_rule_markers_present():
     assert "If no date is given, ask." in out
     assert "use today" not in out
     assert "except tanggal" not in out
-    assert "The function requires every field" in out
+    assert "The function requires every field except jam_selesai" in out
     assert "accepts null" not in out
     assert "Setelah memanggil fungsi, berhenti." in out
     assert "After the function returns" not in out
@@ -79,9 +79,10 @@ def test_multi_record_rule_kept():
 
 def test_optional_field_rules_present():
     out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
-    assert "Plus two optional fields" in out
+    assert "Plus three optional fields" in out
     assert "review (optional)" in out
     assert "tim_pekerjaan (optional)" in out
+    assert "omit jam_selesai entirely" in out
     assert '"[a/b/c/d] status"' in out
     assert "the work name goes to jenis_pekerjaan" in out
     assert "max 3 days after the task date" in out

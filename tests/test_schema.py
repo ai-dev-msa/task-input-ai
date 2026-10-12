@@ -7,13 +7,12 @@ from alokasi_agent.schema import CREATE_ALOKASI_TOOL, validate_arguments
 
 GOLDEN_PATH = Path(__file__).parent / "golden" / "create_alokasi_input_schema.json"
 
-SIX_FIELDS = {
+REQUIRED = {
     "nama_karyawan",
     "nama_proyek",
     "tanggal",
     "jenis_pekerjaan",
     "jam_mulai",
-    "jam_selesai",
 }
 
 
@@ -30,10 +29,10 @@ def test_input_schema_declares_formats():
     assert props["jam_selesai"]["pattern"] == "^\\d{2}:\\d{2}$"
 
 
-def test_all_six_fields_are_required():
+def test_required_fields_exclude_jam_selesai():
     schema = CREATE_ALOKASI_TOOL["input_schema"]
-    assert set(schema["required"]) == SIX_FIELDS
-    assert len(schema["required"]) == 6
+    assert set(schema["required"]) == REQUIRED
+    assert len(schema["required"]) == 5
 
 
 def test_input_schema_matches_golden_snapshot():
@@ -65,6 +64,11 @@ def test_validate_accepts_sample():
     assert validate_arguments(as_json()) == []
 
 
+def test_validate_accepts_missing_jam_selesai():
+    payload = json.dumps({k: v for k, v in VALID_ARGS.items() if k != "jam_selesai"})
+    assert validate_arguments(payload) == []
+
+
 def test_validate_accepts_optional_fields():
     assert (
         validate_arguments(
@@ -74,7 +78,15 @@ def test_validate_accepts_optional_fields():
     )
 
 
-@pytest.mark.parametrize("payload", [as_json(review=""), as_json(tim_pekerjaan="   ")])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        as_json(review=""),
+        as_json(tim_pekerjaan="   "),
+        as_json(jam_selesai=""),
+        as_json(jam_selesai="   "),
+    ],
+)
 def test_validate_rejects_blank_optional_field(payload):
     assert validate_arguments(payload) != []
 
@@ -85,7 +97,6 @@ def test_validate_rejects_blank_optional_field(payload):
         "bukan json {",
         "[1, 2]",
         "null",
-        json.dumps({k: v for k, v in VALID_ARGS.items() if k != "jam_selesai"}),
         as_json(nama_karyawan=""),
         as_json(nama_karyawan="   "),
         json.dumps({**VALID_ARGS, "jenis_pekerjaan": None}),
@@ -106,6 +117,6 @@ def test_validate_rejects_malformed_output(payload):
 
 def test_validate_reports_every_missing_field():
     errors = validate_arguments('{"tanggal":"2026-13-45"}')
-    for field in ("nama_karyawan", "nama_proyek", "jenis_pekerjaan", "jam_mulai", "jam_selesai"):
+    for field in ("nama_karyawan", "nama_proyek", "jenis_pekerjaan", "jam_mulai"):
         assert any(field in error for error in errors)
     assert any("tanggal" in error for error in errors)

@@ -15,18 +15,20 @@ REQUIRED_FIELDS = (
     "tanggal",
     "jenis_pekerjaan",
     "jam_mulai",
-    "jam_selesai",
 )
 
 # Optional fields the model may add; absent means "user did not provide".
+# jam_selesai: omit on insert when the user gives no end time.
 OPTIONAL_FIELDS = (
+    "jam_selesai",
     "review",
     "tim_pekerjaan",
 )
 
 CREATE_ALOKASI_DESCRIPTION = (
     "Buat satu baris alokasi kerja karyawan untuk satu tanggal: "
-    "nama karyawan, nama proyek, tanggal, jenis pekerjaan, dan jam mulai/selesai."
+    "nama karyawan, nama proyek, tanggal, jenis pekerjaan, dan jam mulai; "
+    "jam selesai opsional (kosongkan jika user tidak menyebutnya)."
 )
 
 CREATE_ALOKASI_TOOL = {

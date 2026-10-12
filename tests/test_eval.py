@@ -63,6 +63,23 @@ def test_parse_summary_strips_confirmation_suffixes():
     assert parse_summary(bare) == [ROW]  # nothing to strip
 
 
+def test_parse_summary_single_time_omits_jam_selesai():
+    line = (
+        "Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN "
+        "| 09:00. Benar?"
+    )
+    rows = parse_summary(line)
+    assert rows == [
+        {
+            "nama_karyawan": "Imam Ihsani",
+            "nama_proyek": "OPRS Divisi WIN 2026",
+            "tanggal": "2026-09-29",
+            "jenis_pekerjaan": "Development Modul PPN",
+            "jam_mulai": "09:00",
+        }
+    ]
+
+
 def test_parse_summary_keeps_review_and_tim():
     line = (
         "Ratna Kusumawati | Pengembangan Produk Baru 2026 | 2026-09-29 "
@@ -354,9 +371,9 @@ def test_dataset_kind_and_split_counts():
         turn["expect"]["kind"] for case in cases for turn in case["turns"]
     )
     assert dict(kinds) == {
-        "confirm": 35,
-        "call": 33,
-        "ask": 13,
+        "confirm": 36,
+        "call": 34,
+        "ask": 12,
         "drop_review": 1,
         "cancel": 1,
         "refuse": 1,

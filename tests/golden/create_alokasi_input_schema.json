@@ -55,8 +55,7 @@
     "nama_proyek",
     "tanggal",
     "jenis_pekerjaan",
-    "jam_mulai",
-    "jam_selesai"
+    "jam_mulai"
   ],
   "title": "CreateAlokasiArgs",
   "type": "object"

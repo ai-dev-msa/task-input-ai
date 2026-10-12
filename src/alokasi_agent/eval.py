@@ -28,7 +28,7 @@ ROW_KINDS = ("confirm", "drop_review", "call")
 OPTIONAL_FIELDS = ("review", "tim_pekerjaan")
 
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_TIME_RANGE = re.compile(r"^\d{2}:\d{2}-\d{2}:\d{2}$")
+_TIME_RANGE = re.compile(r"^\d{2}:\d{2}(-\d{2}:\d{2})?$")
 
 
 def load_cases(path: str | Path) -> list[dict[str, Any]]:
@@ -82,15 +82,16 @@ def parse_summary(reply: str | None) -> list[dict[str, str]]:
             return []
         if not _DATE.match(tanggal) or not _TIME_RANGE.match(jam):
             return []
-        mulai, selesai = jam.split("-")
+        mulai, _, selesai = jam.partition("-")
         row = {
             "nama_karyawan": nama,
             "nama_proyek": proyek,
             "tanggal": tanggal,
             "jenis_pekerjaan": jenis,
             "jam_mulai": mulai,
-            "jam_selesai": selesai,
         }
+        if selesai:
+            row["jam_selesai"] = selesai
         for key, value in zip(OPTIONAL_FIELDS, parts[5:]):
             if value:
                 row[key] = value

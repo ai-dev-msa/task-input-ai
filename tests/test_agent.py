@@ -279,7 +279,7 @@ def test_invalid_tool_call_retries_once_with_errors():
     assert sent[-1]["role"] == "tool"
     assert sent[-1]["tool_call_id"] == "call_1"
     assert "tanggal" in sent[-1]["content"]
-    assert "jam_selesai" in sent[-1]["content"]
+    assert "jam_mulai" in sent[-1]["content"]
 
 
 def test_invalid_twice_returns_error_envelope():

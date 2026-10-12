@@ -77,7 +77,7 @@ The agent's job is to take an action (write a row to the database), not to write
 | `tanggal` | `YYYY-MM-DD` | `2026-09-29` |
 | `jenis_pekerjaan` | string | `Development Modul PPN` |
 | `jam_mulai` | `HH:MM` | `09:00` |
-| `jam_selesai` | `HH:MM` | `12:00` |
+| `jam_selesai` | `HH:MM` | `12:00` | opsional (2026-10-12) — key dihilangkan jika user tidak menyebut jam selesai |
 
 Which arguments are required is defined in FR-01.
 
@@ -176,6 +176,7 @@ FR-01 to FR-16 map to workflow issues #1 to #16.
 #### FR-01 (#1): Define the tool schema and contract
 - Write the `create_alokasi` tool definition with 6 arguments: `nama_karyawan`, `nama_proyek`, `tanggal` (YYYY-MM-DD), `jenis_pekerjaan`, `jam_mulai`, and `jam_selesai` (HH:MM).
 - Mark which fields are required.
+- **Decision (2026-10-12):** `jam_selesai` is optional on insert — the key is simply omitted when the user gives no end time. Updating it later is backend/CI3-owned, not an AI-track tool. `keterangan` stays CI3-side only. So five required (`nama_karyawan`, `nama_proyek`, `tanggal`, `jenis_pekerjaan`, `jam_mulai`) plus optional `jam_selesai`.
 - Document the response envelope: `success`, `type`, `function_name`, `arguments`, `hasil_ci3`, and `raw_message`.
 - **Done when:** the schema lives in a single file that the prompt, the validator, and the tests all share.
 
@@ -202,7 +203,7 @@ FR-01 to FR-16 map to workflow issues #1 to #16.
 > **Delivered (2026-10-01).** `src/alokasi_agent/agent.py` — `run(raw_message, *, user_name, employees, projects, history, user_id, now, client) -> (envelope, history)`. Routes tool call vs text reply (`type`: `function_call` | `text`), carries the model's text in `reply`, threads conversation history across the confirmation loop. Done-condition: `scripts/smoke_agent.py` live run exits 0 with the sample arguments. Argument parsing/validation stays FR-05. History transport: FR-16.
 
 #### FR-05 (#5): Structured output, validation, and retry/fallback
-- Validate the arguments (Pydantic or JSON Schema): date format, HH:MM format, and `jam_selesai > jam_mulai`.
+- Validate the arguments (Pydantic or JSON Schema): date format, HH:MM format, and `jam_selesai > jam_mulai` (order check only applies when `jam_selesai` is present).
   - Real calendar/time validity (e.g. reject `2026-13-45`, `99:99`) is owned here: parse with `date.fromisoformat`, enforce hour ≤ 23 and minute ≤ 59. FR-01's patterns only check shape.
 - If validation fails, retry once and pass the error message back to the LLM.
 - If it still fails, return `success: false` with a clear reason instead of a partial call.
@@ -220,7 +221,7 @@ FR-01 to FR-16 map to workflow issues #1 to #16.
 ### Milestone 3: Robustness
 
 #### FR-07 (#7): Missing/ambiguous field handling (clarification loop)
-- Detect missing required fields and ask a targeted follow-up question, e.g. "Jam selesainya jam berapa?".
+- Detect missing required fields and ask a targeted follow-up question, e.g. "Jam selesainya jam berapa?" (asked only for an *ambiguous/invalid* end time the user tried to give — a *missing* `jam_selesai` is now fine and is not asked about, per the 2026-10-12 decision in FR-01).
 - Merge the user's answer into the pending arguments (short conversation state).
 - **Done when:** a partial message followed by an answer produces a complete call.
 > **Delivered (2026-10-01).** No new `src/` code: detect-and-ask is prompt instruction #4 (marker pinned in `tests/test_prompt.py`), the short conversation state is FR-04 history threading, and FR-05 blocks any incomplete call (the model must ask instead). Done-condition: `tests/test_agent.py::test_partial_message_then_answer_produces_complete_call` (stubbed) and live `scripts/smoke_agent.py --partial` (interactive). History transport: FR-16.
