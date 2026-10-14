@@ -9,16 +9,20 @@ import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import sys
+sys.path.insert(0, "/var/www/html/msaai/ai-service/app/src")
+
+from alokasi_agent import run
 
 
 load_dotenv("/var/www/html/msaai/.env", override=True)
 
 app = Flask(__name__)
 
-import sys
-sys.path.insert(0, "/var/www/html/msaai/ai-service/app")
 
-from modules.proyek import proyek_bp, controller
+
+from modules.proyek import proyek_bp
+from modules.proyek.routes import controller as proyek_controller #by ihsan
 app.register_blueprint(proyek_bp)
 
 from modules.karyawan import karyawan_bp
@@ -69,7 +73,7 @@ def get_projects():
     try:
         token = get_erp_token()
         tahun = str(datetime.now(ZoneInfo("Asia/Jakarta")).year)
-        for fetch in (controller.getProyekMSAByYear, controller.getProyekWINByYear):
+        for fetch in (proyek_controller.getProyekMSAByYear, proyek_controller.getProyekWINByYear):
             response, status = fetch(tahun, token)
             if status == 200:
                 names += _names_from(response.get_json().get("data"))
