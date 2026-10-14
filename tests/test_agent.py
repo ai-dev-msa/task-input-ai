@@ -384,10 +384,14 @@ def test_project_match_ignores_case_and_padding():
     assert env["type"] == "function_call"
 
 
-def test_empty_projects_list_skips_check():
+def test_empty_projects_list_blocks_call():
+    # Fail-closed: no list to check against means the name cannot be verified.
     args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "Anything At All")
     env, _ = call_run(make_stub([tool_reply(arguments=args)], []), projects=[])
-    assert env["type"] == "function_call"
+    assert env["success"] is False
+    assert env["type"] == "error"
+    assert env["arguments"] == ""
+    assert env["reply"] == "Daftar proyek tidak tersedia, coba lagi."
 
 
 def test_no_close_candidate_still_asks():
@@ -451,10 +455,14 @@ def test_employee_match_ignores_case_and_padding():
     assert env["type"] == "function_call"
 
 
-def test_empty_employees_list_skips_check():
+def test_empty_employees_list_blocks_call():
+    # Fail-closed: no list to check against means the name cannot be verified.
     args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Anyone At All")
     env, _ = call_run(make_stub([tool_reply(arguments=args)], []), employees=[])
-    assert env["type"] == "function_call"
+    assert env["success"] is False
+    assert env["type"] == "error"
+    assert env["arguments"] == ""
+    assert env["reply"] == "Daftar karyawan tidak tersedia, coba lagi."
 
 
 def test_unknown_employee_no_close_candidate_still_asks():
@@ -474,6 +482,93 @@ def test_unknown_employee_multiple_candidates_offer_a_choice():
     assert "Imam Ihsani" in env["reply"]
     assert "Imam Hidayat" in env["reply"]
     assert "Maksud kamu" not in env["reply"]
+
+
+# --- membership checks: fail-closed lists, tim_pekerjaan, canonical rewrite ---
+
+def with_tim(tim_value):
+    row = json.loads(SAMPLE_ARGUMENTS)
+    row["tim_pekerjaan"] = tim_value
+    return json.dumps(row, separators=(",", ":"))
+
+
+def test_both_empty_lists_block_call():
+    env, _ = call_run(
+        make_stub([tool_reply()], []), employees=[], projects=[]
+    )
+    assert env["success"] is False
+    assert env["type"] == "error"
+    assert env["reply"] == "Daftar karyawan dan proyek tidak tersedia, coba lagi."
+
+
+def test_empty_lists_still_pass_text_reply():
+    env, _ = call_run(
+        make_stub([text_reply("Untuk proyek apa alokasi ini?")], []),
+        employees=[],
+        projects=[],
+    )
+    assert env["success"] is True
+    assert env["type"] == "text"
+    assert env["reply"] == "Untuk proyek apa alokasi ini?"
+
+
+def test_unknown_tim_member_no_close_match_offers_delete():
+    env, _ = call_run(make_stub([tool_reply(arguments=with_tim("Orang Asing"))], []))
+    assert env["type"] == "text"
+    assert env["arguments"] == ""
+    assert (
+        env["reply"]
+        == 'Anggota tim "Orang Asing" tidak ada di daftar karyawan. Hapus dari tim?'
+    )
+
+
+def test_unknown_tim_member_close_match_offers_delete():
+    env, _ = call_run(make_stub([tool_reply(arguments=with_tim("Imam Ihsan"))], []))
+    assert env["type"] == "text"
+    assert (
+        env["reply"]
+        == 'Maksud kamu "Imam Ihsani" untuk tim, atau hapus "Imam Ihsan"?'
+    )
+
+
+def test_unknown_tim_member_multiple_candidates_offer_choice():
+    args = with_tim("Imam")
+    employees = ["Imam Ihsani", "Imam Hidayat"]
+    env, _ = call_run(
+        make_stub([tool_reply(arguments=args)], []), employees=employees
+    )
+    assert env["type"] == "text"
+    assert env["reply"].startswith('Anggota tim "Imam" tidak ada. Pilih:')
+    assert "Imam Ihsani" in env["reply"]
+    assert "Imam Hidayat" in env["reply"]
+    assert 'atau hapus "Imam"?' in env["reply"]
+
+
+def test_unknown_tim_member_blocks_whole_batch():
+    good = SAMPLE_ARGUMENTS
+    bad = with_tim("Orang Asing")
+    env, _ = call_run(make_stub([tool_reply_multi([good, bad])], []))
+    assert env["type"] == "text"
+    assert env["arguments"] == ""
+
+
+def test_valid_tim_member_passes_through():
+    env, _ = call_run(make_stub([tool_reply(arguments=with_tim("Budi Santoso"))], []))
+    assert env["type"] == "function_call"
+    assert json.loads(env["arguments"])["tim_pekerjaan"] == "Budi Santoso"
+
+
+def test_case_mismatch_rewritten_to_canonical():
+    row = json.loads(SAMPLE_ARGUMENTS)
+    row["nama_karyawan"] = "  imam ihsani "
+    row["nama_proyek"] = "oprs divisi win 2026"
+    row["tim_pekerjaan"] = "budi santoso, IMAM IHSANI"
+    env, _ = call_run(make_stub([tool_reply(arguments=json.dumps(row))], []))
+    assert env["type"] == "function_call"
+    args = json.loads(env["arguments"])
+    assert args["nama_karyawan"] == "Imam Ihsani"
+    assert args["nama_proyek"] == "OPRS Divisi WIN 2026"
+    assert args["tim_pekerjaan"] == "Budi Santoso, Imam Ihsani"
 
 
 # --- FR-08 row guard: what is inserted must equal what was confirmed ---

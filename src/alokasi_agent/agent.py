@@ -35,72 +35,155 @@ def _validate_calls(calls: list[dict[str, Any]]) -> dict[str, list[str]]:
     }
 
 
-def _project_problem(
-    calls: list[dict[str, Any]], projects: Sequence[str]
-) -> str | None:
-    """Hard list check: every row's nama_proyek must exist in `projects`.
-
-    Trim + case-insensitive match. Returns the user-facing question when some
-    row's project is unknown, else None. Empty list means "no list to check
-    against", so the check is skipped.
-    """
-    if not projects:
-        return None
+def _canonical_map(valid: Sequence[str]) -> dict[str, str]:
+    """casefolded name -> exact list spelling (first spelling wins)."""
     canonical: dict[str, str] = {}
-    for name in projects:
+    for name in valid:
         canonical.setdefault(name.strip().casefold(), name)
+    return canonical
+
+
+def _list_problem(
+    values: Sequence[str],
+    valid: Sequence[str],
+    kind: str,
+    *,
+    offer_delete: bool = False,
+) -> str | None:
+    """Question when some value is missing from `valid`; None when all match.
+
+    Trim + case-insensitive match; unknown values get a close-match question.
+    `kind` is the field label in the message ("Karyawan", "Proyek",
+    "Anggota tim"). tim_pekerjaan members are employees, so the no-match
+    message says "daftar karyawan" for both the employee and tim kinds.
+    `offer_delete` adds the "hapus" option, because tim_pekerjaan is optional
+    and the user may rather drop the name than fix it.
+    """
+    if not valid:
+        return None
+    canonical = _canonical_map(valid)
+    list_name = "proyek" if kind == "Proyek" else "karyawan"
     lines: list[str] = []
-    for tc in calls:
-        args = json.loads(tc["function"].get("arguments", ""))
-        value = str(args.get("nama_proyek", "")).strip()
-        if value.casefold() in canonical:
+    for value in values:
+        if value.strip().casefold() in canonical:
             continue
         candidates = difflib.get_close_matches(
             value, list(canonical.values()), n=3, cutoff=0.5
         )
         if len(candidates) == 1:
-            lines.append(f'Maksud kamu "{candidates[0]}"?')
+            if offer_delete:
+                lines.append(
+                    f'Maksud kamu "{candidates[0]}" untuk tim, atau hapus "{value}"?'
+                )
+            else:
+                lines.append(f'Maksud kamu "{candidates[0]}"?')
         elif candidates:
-            lines.append(
-                f'Proyek "{value}" tidak ada. Pilih: {", ".join(candidates)}'
-            )
+            if offer_delete:
+                lines.append(
+                    f'{kind} "{value}" tidak ada. Pilih: '
+                    f'{", ".join(candidates)}, atau hapus "{value}"?'
+                )
+            else:
+                lines.append(
+                    f'{kind} "{value}" tidak ada. Pilih: {", ".join(candidates)}'
+                )
         else:
-            lines.append(f'Proyek "{value}" tidak ada di daftar proyek.')
+            line = f'{kind} "{value}" tidak ada di daftar {list_name}.'
+            if offer_delete:
+                line += " Hapus dari tim?"
+            lines.append(line)
     return " ".join(lines) or None
 
 
 def _employee_problem(
     calls: list[dict[str, Any]], employees: Sequence[str]
 ) -> str | None:
-    """Hard list check: every row's nama_karyawan must exist in `employees`.
+    """Question when a row's nama_karyawan is not in `employees`."""
+    values = [
+        str(
+            json.loads(tc["function"].get("arguments", "")).get("nama_karyawan", "")
+        ).strip()
+        for tc in calls
+    ]
+    return _list_problem(values, employees, "Karyawan")
 
-    Trim + case-insensitive match. Returns the user-facing question when some
-    row's employee is unknown, else None. Empty list means "no list to check
-    against", so the check is skipped.
+
+def _project_problem(
+    calls: list[dict[str, Any]], projects: Sequence[str]
+) -> str | None:
+    """Question when a row's nama_proyek is not in `projects`."""
+    values = [
+        str(
+            json.loads(tc["function"].get("arguments", "")).get("nama_proyek", "")
+        ).strip()
+        for tc in calls
+    ]
+    return _list_problem(values, projects, "Proyek")
+
+
+def _tim_problem(
+    calls: list[dict[str, Any]], employees: Sequence[str]
+) -> str | None:
+    """Question when a tim_pekerjaan member is not in `employees`.
+
+    The field is optional and comma-separated; empty segments are ignored.
     """
-    if not employees:
-        return None
-    canonical: dict[str, str] = {}
-    for name in employees:
-        canonical.setdefault(name.strip().casefold(), name)
-    lines: list[str] = []
+    values: list[str] = []
     for tc in calls:
-        args = json.loads(tc["function"].get("arguments", ""))
-        value = str(args.get("nama_karyawan", "")).strip()
-        if value.casefold() in canonical:
-            continue
-        candidates = difflib.get_close_matches(
-            value, list(canonical.values()), n=3, cutoff=0.5
+        raw = str(
+            json.loads(tc["function"].get("arguments", "")).get("tim_pekerjaan", "")
         )
-        if len(candidates) == 1:
-            lines.append(f'Maksud kamu "{candidates[0]}"?')
-        elif candidates:
-            lines.append(
-                f'Karyawan "{value}" tidak ada. Pilih: {", ".join(candidates)}'
-            )
-        else:
-            lines.append(f'Karyawan "{value}" tidak ada di daftar karyawan.')
-    return " ".join(lines) or None
+        values += [part.strip() for part in raw.split(",") if part.strip()]
+    return _list_problem(values, employees, "Anggota tim", offer_delete=True)
+
+
+def _missing_lists_message(
+    employees: Sequence[str], projects: Sequence[str]
+) -> str | None:
+    """Fail-closed: an empty list means the names cannot be checked at all
+    (the server fetch may have failed), so a call must not reach the ERP."""
+    if employees and projects:
+        return None
+    if not employees and not projects:
+        return "Daftar karyawan dan proyek tidak tersedia, coba lagi."
+    if not employees:
+        return "Daftar karyawan tidak tersedia, coba lagi."
+    return "Daftar proyek tidak tersedia, coba lagi."
+
+
+def _canonical_name(value: str, valid: Sequence[str]) -> str:
+    """Exact list spelling for `value`, or `value` itself when nothing fits."""
+    wanted = value.strip().casefold()
+    for name in valid:
+        if name.strip().casefold() == wanted:
+            return name
+    return value
+
+
+def _canonicalize_row(
+    raw: str, employees: Sequence[str], projects: Sequence[str]
+) -> str:
+    """Rewrite a checked row's names to the exact list spellings.
+
+    Returns `raw` untouched when nothing changed, so an already-canonical
+    row keeps the model's exact JSON string (PRD sample shape unchanged).
+    """
+    args = json.loads(raw)
+    changed = False
+    for field, valid in (("nama_karyawan", employees), ("nama_proyek", projects)):
+        value = str(args.get(field, ""))
+        canonical = _canonical_name(value, valid)
+        if canonical != value:
+            args[field] = canonical
+            changed = True
+    tim = args.get("tim_pekerjaan")
+    if isinstance(tim, str) and tim.strip():
+        members = [part.strip() for part in tim.split(",") if part.strip()]
+        joined = ", ".join(_canonical_name(member, employees) for member in members)
+        if joined != tim:
+            args["tim_pekerjaan"] = joined
+            changed = True
+    return raw if not changed else json.dumps(args, separators=(",", ":"))
 
 
 def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
@@ -189,6 +272,10 @@ def run(
             error for tc in calls for error in errors_by_id.get(tc.get("id", ""), [])
         ]
         refuse_reason = "Data tidak valid setelah dicoba ulang: " + "; ".join(errors)
+    elif calls and (missing := _missing_lists_message(employees, projects)):
+        # Fail-closed: with no list to check against, the names cannot be
+        # verified, so nothing goes to the ERP.
+        refuse_reason = missing
     elif calls and confirmed and not _same_rows(calls, confirmed):
         # FR-08 row guard: the summary above IS what the user confirmed, so
         # the calls must match it exactly — count and every field. Nudge once
@@ -264,10 +351,28 @@ def run(
             "reply": project_question,
         }
         history_content = project_question
+    elif calls and (tim_question := _tim_problem(calls, employees)):
+        # List miss: ask instead of writing (never a function_call). The
+        # question also offers to drop the name, since tim is optional.
+        envelope = {
+            "success": True,
+            "type": "text",
+            "function_name": "",
+            "arguments": "",
+            "raw_message": raw_message,
+            "user_id": user_id,
+            "reply": tim_question,
+        }
+        history_content = tim_question
     elif calls:
         # One row keeps the model's object string (PRD sample shape unchanged);
         # several rows become a JSON array string the backend iterates (FR-08).
-        rows = [tc["function"]["arguments"] for tc in calls]
+        # Names are rewritten to the exact list spellings first; a row that
+        # was already canonical keeps its original string.
+        rows = [
+            _canonicalize_row(tc["function"]["arguments"], employees, projects)
+            for tc in calls
+        ]
         arguments = (
             rows[0] if len(rows) == 1 else json.dumps([json.loads(row) for row in rows])
         )
