@@ -474,3 +474,139 @@ def test_unknown_employee_multiple_candidates_offer_a_choice():
     assert "Imam Ihsani" in env["reply"]
     assert "Imam Hidayat" in env["reply"]
     assert "Maksud kamu" not in env["reply"]
+
+
+# --- FR-08 row guard: what is inserted must equal what was confirmed ---
+
+TWO_ROW_SUMMARY = (
+    "Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN"
+    " | 09:00-12:00\n"
+    "Budi Santoso | OPRS Divisi WIN 2026 | 2026-09-30 | Testing sistem"
+    " | 16:30-17:00 | [1/1/0/2] Done. Benar?"
+)
+PENDING_HISTORY = [
+    {"role": "user", "content": "pagi dev PPN, siang testing proyek OPRS"},
+    {"role": "assistant", "content": TWO_ROW_SUMMARY},
+]
+# Same as ROW2_ARGUMENTS but jam_mulai drifted to 16:00 — valid JSON and
+# valid format, so FR-05 never sees it; only the row guard can catch it.
+DRIFTED_ROW2_ARGUMENTS = (
+    '{"nama_karyawan":"Budi Santoso","nama_proyek":"OPRS Divisi WIN 2026",'
+    '"tanggal":"2026-09-30","jenis_pekerjaan":"Testing sistem",'
+    '"jam_mulai":"16:00","jam_selesai":"17:00","review":"[1/1/0/2] Done"}'
+)
+
+
+def test_confirmed_rows_parses_last_assistant_summary():
+    from alokasi_agent.agent import _confirmed_rows
+
+    rows = _confirmed_rows(PENDING_HISTORY)
+    assert rows == [
+        {
+            "nama_karyawan": "Imam Ihsani",
+            "nama_proyek": "OPRS Divisi WIN 2026",
+            "tanggal": "2026-09-29",
+            "jenis_pekerjaan": "Development Modul PPN",
+            "jam_mulai": "09:00",
+            "jam_selesai": "12:00",
+        },
+        {
+            "nama_karyawan": "Budi Santoso",
+            "nama_proyek": "OPRS Divisi WIN 2026",
+            "tanggal": "2026-09-30",
+            "jenis_pekerjaan": "Testing sistem",
+            "jam_mulai": "16:30",
+            "jam_selesai": "17:00",
+            "review": "[1/1/0/2] Done",
+        },
+    ]
+    assert _confirmed_rows([]) == []
+    assert _confirmed_rows([{"role": "assistant", "content": "Untuk proyek apa?"}]) == []
+    assert _confirmed_rows([{"role": "user", "content": "a | b | c | d | e"}]) == []
+
+
+def test_row_guard_matching_rows_pass_without_nudge():
+    calls = []
+    stub = make_stub([tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS])], calls)
+    env, _ = call_run(stub, raw_message="ya", history=PENDING_HISTORY)
+    assert env["type"] == "function_call"
+    assert len(json.loads(env["arguments"])) == 2
+    assert len(calls) == 1  # exact match -> no corrective retry
+
+
+def test_row_guard_mismatch_nudges_with_confirmed_rows():
+    calls = []
+    stub = make_stub(
+        [tool_reply(), tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS])],
+        calls,
+    )
+    env, _ = call_run(stub, raw_message="ya", history=PENDING_HISTORY)
+    assert env["type"] == "function_call"
+    assert len(json.loads(env["arguments"])) == 2
+    assert len(calls) == 2
+    nudge = calls[1]["messages"][-1]
+    assert nudge["role"] == "user"
+    assert "2 baris" in nudge["content"]
+    assert "Testing sistem" in nudge["content"]  # the nudge carries the actual rows
+
+
+def test_row_guard_still_mismatched_refuses():
+    calls = []
+    stub = make_stub([tool_reply(), tool_reply()], calls)
+    env, _ = call_run(stub, raw_message="ya", history=PENDING_HISTORY)
+    assert env["success"] is False
+    assert env["type"] == "error"
+    assert env["function_name"] == ""
+    assert env["arguments"] == ""
+    assert "1 panggilan vs 2 baris" in env["reply"]
+    assert "Tidak ada data yang dikirim" in env["reply"]
+    assert len(calls) == 2
+    assert env["history"][-1] == {"role": "assistant", "content": env["reply"]}
+
+
+def test_row_guard_extra_call_refuses():
+    calls = []
+    three = tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS, SAMPLE_ARGUMENTS])
+    stub = make_stub([three, three], calls)
+    env, _ = call_run(stub, raw_message="ya", history=PENDING_HISTORY)
+    assert env["type"] == "error"
+    assert "3 panggilan vs 2 baris" in env["reply"]
+    assert len(calls) == 2
+
+
+def test_row_guard_field_drift_recovers_after_nudge():
+    # Two rows, right count, but row 2's jam_mulai drifted from 16:30 to
+    # 16:00. Format-valid, so only equality against the confirmed summary
+    # can catch it.
+    calls = []
+    stub = make_stub(
+        [
+            tool_reply_multi([SAMPLE_ARGUMENTS, DRIFTED_ROW2_ARGUMENTS]),
+            tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS]),
+        ],
+        calls,
+    )
+    env, _ = call_run(stub, raw_message="ya", history=PENDING_HISTORY)
+    assert env["type"] == "function_call"
+    rows = json.loads(env["arguments"])
+    assert len(rows) == 2
+    assert rows[1]["jam_mulai"] == "16:30"
+    assert len(calls) == 2
+
+
+def test_row_guard_fr05_shrink_recovered():
+    # FR-05 retry clears its errors but drops a row; the row guard must
+    # still recover the confirmed batch.
+    calls = []
+    stub = make_stub(
+        [
+            tool_reply_multi([SAMPLE_ARGUMENTS, INVALID_ARGUMENTS]),  # FR-05 retry
+            tool_reply(),                                             # shrinks to 1
+            tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS]),     # nudge recovers
+        ],
+        calls,
+    )
+    env, _ = call_run(stub, raw_message="ya", history=PENDING_HISTORY)
+    assert env["type"] == "function_call"
+    assert len(json.loads(env["arguments"])) == 2
+    assert len(calls) == 3

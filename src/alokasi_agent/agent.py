@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
 
+from alokasi_agent.eval import parse_summary
 from alokasi_agent.llm import complete as default_complete
 from alokasi_agent.llm import to_openai_tools
 from alokasi_agent.prompt import build_system_prompt
@@ -102,6 +103,32 @@ def _employee_problem(
     return " ".join(lines) or None
 
 
+def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
+    """Structured rows from the pending confirmation summary, or [].
+
+    The last assistant turn is the summary the user is confirming; eval's
+    parse_summary turns its 'a | b | c | d | e' lines back into row dicts.
+    [] means "nothing to compare against" (no summary, or one that will not
+    parse), which turns the row guard off and keeps the old behaviour.
+    """
+    for turn in reversed(history):
+        if turn.get("role") == "assistant":
+            return parse_summary(turn.get("content"))
+    return []
+
+
+def _same_rows(calls: list[dict[str, Any]], confirmed: list[dict[str, str]]) -> bool:
+    """True when the model's calls are exactly the confirmed rows (any order)."""
+
+    def canonical(rows):
+        return sorted(
+            json.dumps(row, sort_keys=True, ensure_ascii=False) for row in rows
+        )
+
+    emitted = [json.loads(tc["function"].get("arguments", "")) for tc in calls]
+    return canonical(emitted) == canonical(confirmed)
+
+
 def run(
     raw_message: str,
     *,
@@ -154,12 +181,55 @@ def run(
         calls = _alokasi_calls(message)
         errors_by_id = _validate_calls(calls)
 
+    confirmed = _confirmed_rows(prior)
+    refuse_reason = ""
     if any(errors_by_id.values()):
         # Still malformed after the retry: refuse instead of sending a partial call.
         errors = [
             error for tc in calls for error in errors_by_id.get(tc.get("id", ""), [])
         ]
-        reason = "Data tidak valid setelah dicoba ulang: " + "; ".join(errors)
+        refuse_reason = "Data tidak valid setelah dicoba ulang: " + "; ".join(errors)
+    elif calls and confirmed and not _same_rows(calls, confirmed):
+        # FR-08 row guard: the summary above IS what the user confirmed, so
+        # the calls must match it exactly — count and every field. Nudge once
+        # with the confirmed rows; if they still differ, refuse rather than
+        # write rows the user never saw.
+        messages = messages + [
+            {
+                "role": "assistant",
+                "content": message.get("content"),
+                "tool_calls": message.get("tool_calls"),
+            },
+            *[
+                {"role": "tool", "tool_call_id": tc.get("id", ""), "content": "OK"}
+                for tc in message.get("tool_calls") or []
+            ],
+            {
+                "role": "user",
+                "content": (
+                    f"Konfirmasi tadi menampilkan {len(confirmed)} baris dengan "
+                    f"isi berikut:\n"
+                    f"{json.dumps(confirmed, ensure_ascii=False)}\n"
+                    f"Tapi kamu mengirim {len(calls)} panggilan atau nilainya "
+                    f"berbeda. Kirim ulang tepat {len(confirmed)} panggilan "
+                    "create_alokasi, satu per baris, persis seperti di atas."
+                ),
+            },
+        ]
+        response = complete(messages, tools=tools)
+        message = response["choices"][0]["message"]
+        calls = _alokasi_calls(message)
+        errors_by_id = _validate_calls(calls)
+        # Short-circuit: with any error present the calls do not all parse,
+        # so _same_rows must not run.
+        if any(errors_by_id.values()) or not _same_rows(calls, confirmed):
+            refuse_reason = (
+                f"Isi alokasi tidak sesuai konfirmasi ({len(calls)} panggilan vs "
+                f"{len(confirmed)} baris, atau nilainya berbeda). "
+                "Tidak ada data yang dikirim."
+            )
+
+    if refuse_reason:
         envelope = {
             "success": False,
             "type": "error",
@@ -167,9 +237,9 @@ def run(
             "arguments": "",
             "raw_message": raw_message,
             "user_id": user_id,
-            "reply": reason,
+            "reply": refuse_reason,
         }
-        history_content: str = reason
+        history_content = refuse_reason
     elif calls and (employee_question := _employee_problem(calls, employees)):
         # List miss: ask instead of writing (never a function_call).
         envelope = {

@@ -152,6 +152,11 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    user_message = ""
+    user_id = None
+    # Kalau terjadi error setelah run(), frontend tetap menerima history
+    # yang sudah diperbarui — kalau tidak, giliran konfirmasi hilang.
+    fallback_history = []
     try:
         data = request.get_json(silent=True) or {}
 
@@ -187,6 +192,7 @@ def chat():
         # Proyek & karyawan dari endpoint server (cached); body hanya fallback.
         projects = get_projects() or (data.get("projects") or [])
         employees = get_employees() or (data.get("employees") or [])
+        fallback_history = data.get("history") or []
         envelope, _history = run(
             user_message,
             user_name=data.get("user_name") or "",
@@ -196,6 +202,7 @@ def chat():
             user_id=user_id,
         )
         body = dict(envelope)
+        fallback_history = body.get("history") or fallback_history
 
         #++VVVVVV Cari function call / ambil arguments (DIHAPUS dari sini karena
         # kode AI track): sekarang ada di src/alokasi_agent/agent.py -> run(),
@@ -228,28 +235,35 @@ def chat():
             #//++VVVVVV
 
             #++VVVVVV Kirim data ke API ERP CI3
-            # One POST per row.
+            # One POST per row. A failed row becomes its own result so the
+            # rows already written stay visible instead of vanishing behind
+            # a generic error.
             results = []
-            for row in rows:
-                response_ci3 = requests.post(
-                    "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/createAlokasi",
-                    json=row,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json"
-                    },
-                    timeout=30
-                )
+            for index, row in enumerate(rows, start=1):
+                try:
+                    response_ci3 = requests.post(
+                        "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/createAlokasi",
+                        json=row,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json"
+                        },
+                        timeout=30
+                    )
 
-                #++VVVVVV DEBUG RESPONSE
-                print("CI3 HTTP STATUS:", response_ci3.status_code)
-                print("CI3 RESPONSE:", response_ci3.text)
-                #//++VVVVVV
+                    #++VVVVVV DEBUG RESPONSE
+                    print("CI3 HTTP STATUS:", response_ci3.status_code)
+                    print("CI3 RESPONSE:", response_ci3.text)
+                    #//++VVVVVV
 
-                #++VVVVVV Ambil response dari API ERP CI3
-                hasil_ci3 = response_ci3.json()
+                    hasil_ci3 = response_ci3.json()
+                except Exception as error:
+                    print(f"CI3 row {index} error:", repr(error))
+                    hasil_ci3 = {
+                        "success": False,
+                        "message": f"Baris {index} gagal dikirim ke ERP",
+                    }
                 results.append(hasil_ci3)
-                #//++VVVVVV
 
             # One row keeps hasil_ci3 an object (the shape callers know);
             # several rows return an array of results.
@@ -276,7 +290,7 @@ def chat():
             "raw_message": user_message,
             "user_id": user_id,
             "reply": "Terjadi kesalahan, coba lagi.",
-            "history": data.get("history") or []
+            "history": fallback_history
         })
 
 

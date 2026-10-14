@@ -196,6 +196,9 @@ Example (`type: "text"`, turn 1 of a confirmation):
   object string. `main.py` handles both: it parses `arguments`, makes one POST
   per row, and returns `hasil_ci3` as an object (one row) or an array
   (several). (PRD FR-08.)
+  If one row's POST fails, that entry of `hasil_ci3` is
+  `{"success": false, "message": "Baris N gagal dikirim ke ERP"}` while the
+  other entries stay as the ERP returned them — render each row's own result.
 - **Names are checked by the model, not by code.** `validate_arguments()`
   checks *formats* (dates, times, non-empty). Whether `"Imam Ihsani"` really
   exists depends on the `employees` list you sent — which is why you must send
@@ -579,6 +582,7 @@ to the ERP, same side effect as curl 3.
 | Confirmed turn comes back as `reply: "Terjadi kesalahan, coba lagi."` | The ERP write failed (the AI part had already succeeded). Check `ERP_API_USERNAME` / `ERP_API_PASSWORD` in `.env`, that `appweb.co.id` is reachable, then read the `ERROR /chat:` line in the server log — the real reason only exists there. |
 | Server log shows `Login ERP gagal. HTTP ...` or `ERP_API_USERNAME / ERP_API_PASSWORD belum tersedia` | `get_erp_token()` could not log in: missing/wrong credentials or the ERP is down. Fix `.env` or the ERP; nothing is written while this fails. |
 | You expected a write but none happened | Only `type: "function_call"` triggers the ERP POST. A `text` turn is just the confirmation question — answer it (`ya`) first. |
+| Confirmation lists 2 rows but only 1 (or 3, or altered values) gets written | The confirm turn's rows no longer match the confirmed summary. Since 2026-10-14 the agent nudges once with the exact confirmed rows and then refuses with an error — nothing partial is written. If you see a partial write, the server is running old code: deploy the current `main.py` + `src/` and confirm the server copy matches this repo (`main.py:14` loads the server's own `.env`). |
 | Browser says CORS blocked | The calling page's origin must be exactly `https://appweb.co.id`. Server-to-server calls (curl, CI3) are unaffected by CORS. |
 | Turn 2 replies as if it forgot everything | The caller did not send back the `history` from the previous response. |
 | The model asks "siapa namanya?" / invents a project | The caller did not send `employees` / `projects`. Format validation can't catch a name that doesn't exist — only the list you send can. |
