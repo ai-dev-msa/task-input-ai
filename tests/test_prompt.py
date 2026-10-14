@@ -72,6 +72,20 @@ def test_rule_markers_present():
     assert "Never invent or abbreviate" in out
 
 
+def test_tone_and_scope_markers_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "# Tone and scope" in out
+    assert "helpful, warm, and approachable" in out
+    assert 'Reply to greetings ("halo", "pagi", "makasih")' in out
+    assert "do not know — never invent an answer" in out
+    assert "you only help with task-allocation input" in out
+    assert "short and warm" in out
+    # The old scope ban is gone: greetings and prompt-data answers are in scope
+    assert "chat about other topics" not in out
+    assert "short and neutral" not in out
+    assert "Your only job" not in out
+
+
 def test_multi_record_rule_kept():
     out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
     assert "(For several records, one line each.)" in out
