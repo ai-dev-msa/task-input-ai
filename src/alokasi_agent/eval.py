@@ -7,9 +7,10 @@ cases and fixture files. Live API calls live in scripts/run_eval.py.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
+
+from alokasi_agent.prompt import parse_summary
 
 # The four decision classes reported by classify() (cancel/refuse collapse
 # into "other", drop_review into "confirm").
@@ -25,10 +26,9 @@ EXPECTED_KIND = {
     "refuse": "other",
 }
 ROW_KINDS = ("confirm", "drop_review", "call")
+# Optional fields tracked by score_turn's optional-field recall (parse_summary
+# lives in prompt.py and parses the same two slots).
 OPTIONAL_FIELDS = ("review", "tim_pekerjaan")
-
-_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_TIME_RANGE = re.compile(r"^\d{2}:\d{2}(-\d{2}:\d{2})?$")
 
 
 def load_cases(path: str | Path) -> list[dict[str, Any]]:
@@ -48,55 +48,6 @@ def load_cases(path: str | Path) -> list[dict[str, Any]]:
 def load_fixture(path: str | Path) -> dict[str, Any]:
     """Read one fixture file ({employees, projects, forbidden})."""
     return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
-def _clean_last_part(part: str) -> str:
-    """Strip the trailing 'Benar?' / 'Salah?' / '.' the summary line ends with."""
-    part = part.strip()
-    for suffix in ("Benar?", "Salah?"):
-        if part.endswith(suffix):
-            part = part[: -len(suffix)].strip()
-    return part.rstrip(".").strip()
-
-
-def parse_summary(reply: str | None) -> list[dict[str, str]]:
-    """Rows parsed from the confirmation summary in a reply.
-
-    Each line is split on '|':
-      nama | proyek | tanggal | jenis | jam_mulai-jam_selesai
-      plus ' | review' and ' | tim_pekerjaan' when present.
-    Lines with fewer than 5 parts are not summaries (the drop_review notice,
-    chatter) and are ignored; a summary-shaped line that will not parse
-    makes the whole reply unparseable (a confirm turn then scores 0 fields).
-    """
-    rows: list[dict[str, str]] = []
-    for line in (reply or "").splitlines():
-        parts = [part.strip() for part in line.split("|")]
-        if len(parts) < 5:
-            continue
-        if len(parts) > 7:
-            return []
-        parts[-1] = _clean_last_part(parts[-1])
-        nama, proyek, tanggal, jenis, jam = parts[:5]
-        if not (nama and proyek and tanggal and jenis and jam):
-            return []
-        if not _DATE.match(tanggal) or not _TIME_RANGE.match(jam):
-            return []
-        mulai, _, selesai = jam.partition("-")
-        row = {
-            "nama_karyawan": nama,
-            "nama_proyek": proyek,
-            "tanggal": tanggal,
-            "jenis_pekerjaan": jenis,
-            "jam_mulai": mulai,
-        }
-        if selesai:
-            row["jam_selesai"] = selesai
-        for key, value in zip(OPTIONAL_FIELDS, parts[5:]):
-            if value:
-                row[key] = value
-        rows.append(row)
-    return rows
 
 
 def classify(envelope: dict[str, Any]) -> str:

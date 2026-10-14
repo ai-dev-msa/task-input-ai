@@ -6,10 +6,9 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
 
-from alokasi_agent.eval import parse_summary
 from alokasi_agent.llm import complete as default_complete
 from alokasi_agent.llm import to_openai_tools
-from alokasi_agent.prompt import build_system_prompt
+from alokasi_agent.prompt import build_system_prompt, parse_summary
 from alokasi_agent.schema import CREATE_ALOKASI_TOOL, validate_arguments
 
 
@@ -189,7 +188,7 @@ def _canonicalize_row(
 def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
     """Structured rows from the pending confirmation summary, or [].
 
-    The last assistant turn is the summary the user is confirming; eval's
+    The last assistant turn is the summary the user is confirming; prompt's
     parse_summary turns its 'a | b | c | d | e' lines back into row dicts.
     [] means "nothing to compare against" (no summary, or one that will not
     parse), which turns the row guard off and keeps the old behaviour.

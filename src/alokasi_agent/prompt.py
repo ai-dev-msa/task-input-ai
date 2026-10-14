@@ -6,6 +6,12 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 _WIB = ZoneInfo("Asia/Jakarta")
+
+# Summary-line shapes for parse_summary (rule 3 in the template below).
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_TIME_RANGE = re.compile(r"^\d{2}:\d{2}(-\d{2}:\d{2})?$")
+# Optional trailing slots of a summary line, after the five required parts.
+_SUMMARY_OPTIONAL = ("review", "tim_pekerjaan")
 _WEEKDAYS_ID = ("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
 _MONTHS_ID = (
     "Januari",
@@ -289,3 +295,55 @@ def build_system_prompt(
         lambda match: values.get(match.group(1), match.group(0)),
         PROMPT_TEMPLATE,
     )
+
+
+def _clean_last_part(part: str) -> str:
+    """Strip the trailing 'Benar?' / 'Salah?' / '.' the summary line ends with."""
+    part = part.strip()
+    for suffix in ("Benar?", "Salah?"):
+        if part.endswith(suffix):
+            part = part[: -len(suffix)].strip()
+    return part.rstrip(".").strip()
+
+
+def parse_summary(reply: str | None) -> list[dict[str, str]]:
+    """Rows parsed from the confirmation summary in a reply.
+
+    Lives here because rule 3 above defines the summary format; eval scores
+    against it and agent's FR-08 row guard re-parses the confirmed summary.
+
+    Each line is split on '|':
+      nama | proyek | tanggal | jenis | jam_mulai-jam_selesai
+      plus ' | review' and ' | tim_pekerjaan' when present.
+    Lines with fewer than 5 parts are not summaries (the drop_review notice,
+    chatter) and are ignored; a summary-shaped line that will not parse
+    makes the whole reply unparseable (a confirm turn then scores 0 fields).
+    """
+    rows: list[dict[str, str]] = []
+    for line in (reply or "").splitlines():
+        parts = [part.strip() for part in line.split("|")]
+        if len(parts) < 5:
+            continue
+        if len(parts) > 7:
+            return []
+        parts[-1] = _clean_last_part(parts[-1])
+        nama, proyek, tanggal, jenis, jam = parts[:5]
+        if not (nama and proyek and tanggal and jenis and jam):
+            return []
+        if not _DATE.match(tanggal) or not _TIME_RANGE.match(jam):
+            return []
+        mulai, _, selesai = jam.partition("-")
+        row = {
+            "nama_karyawan": nama,
+            "nama_proyek": proyek,
+            "tanggal": tanggal,
+            "jenis_pekerjaan": jenis,
+            "jam_mulai": mulai,
+        }
+        if selesai:
+            row["jam_selesai"] = selesai
+        for key, value in zip(_SUMMARY_OPTIONAL, parts[5:]):
+            if value:
+                row[key] = value
+        rows.append(row)
+    return rows

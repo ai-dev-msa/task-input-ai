@@ -8,10 +8,10 @@ from alokasi_agent.eval import (
     classify,
     load_cases,
     load_fixture,
-    parse_summary,
     score_turn,
     sum_usage,
 )
+from alokasi_agent.prompt import parse_summary
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES_PATH = ROOT / "eval" / "cases.jsonl"
