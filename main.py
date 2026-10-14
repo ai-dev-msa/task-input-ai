@@ -9,14 +9,17 @@ import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import sys
+sys.path.insert(0, "/var/www/html/msaai/ai-service/app/src")
+
+from alokasi_agent import run
 
 
 load_dotenv("/var/www/html/msaai/.env", override=True)
 
 app = Flask(__name__)
 
-import sys
-sys.path.insert(0, "/var/www/html/msaai/ai-service/app")
+
 
 from modules.proyek import proyek_bp
 from modules.proyek.routes import controller as proyek_controller #by ihsan
