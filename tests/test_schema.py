@@ -115,8 +115,58 @@ def test_validate_rejects_malformed_output(payload):
     assert validate_arguments(payload) != []
 
 
+def test_explicit_null_on_optional_fields_is_accepted():
+    args = json.dumps({
+        "nama_karyawan": "Imam Ihsani",
+        "nama_proyek": "OPRS Divisi WIN 2026",
+        "tanggal": "2026-09-29",
+        "jenis_pekerjaan": "Development Modul PPN",
+        "jam_mulai": "09:00",
+        "jam_selesai": "12:00",
+        "review": None,
+        "tim_pekerjaan": None,
+    })
+    assert validate_arguments(args) == []
+
+
+def test_empty_string_on_optional_field_still_errors():
+    args = json.dumps({
+        "nama_karyawan": "Imam Ihsani",
+        "nama_proyek": "OPRS Divisi WIN 2026",
+        "tanggal": "2026-09-29",
+        "jenis_pekerjaan": "Development Modul PPN",
+        "jam_mulai": "09:00",
+        "review": "",
+    })
+    assert "review kosong atau tidak diisi" in validate_arguments(args)
+
+
 def test_validate_reports_every_missing_field():
     errors = validate_arguments('{"tanggal":"2026-13-45"}')
     for field in ("nama_karyawan", "nama_proyek", "jenis_pekerjaan", "jam_mulai"):
         assert any(field in error for error in errors)
     assert any("tanggal" in error for error in errors)
+
+
+from alokasi_agent.schema import FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL
+
+
+def test_find_tools_share_one_shape():
+    for tool, name, title in (
+        (FIND_EMPLOYEE_TOOL, "find_employee", "FindEmployeeArgs"),
+        (FIND_PROJECT_TOOL, "find_project", "FindProjectArgs"),
+    ):
+        assert tool["name"] == name
+        assert tool["description"]
+        schema = tool["input_schema"]
+        assert schema["type"] == "object"
+        assert schema["title"] == title
+        assert schema["additionalProperties"] is False
+        assert schema["required"] == ["name"]
+        assert schema["properties"]["name"]["type"] == "string"
+        assert schema["properties"]["name"]["minLength"] == 1
+
+
+def test_find_tools_names_do_not_collide_with_create():
+    assert FIND_EMPLOYEE_TOOL["name"] != CREATE_ALOKASI_TOOL["name"]
+    assert FIND_PROJECT_TOOL["name"] != CREATE_ALOKASI_TOOL["name"]

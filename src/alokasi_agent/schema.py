@@ -92,6 +92,53 @@ CREATE_ALOKASI_TOOL = {
     },
 }
 
+FIND_EMPLOYEE_DESCRIPTION = (
+    "Cocokkan nama dengan daftar karyawan. Panggil untuk setiap nama_karyawan "
+    "dan setiap anggota tim_pekerjaan sebelum create_alokasi; gunakan ejaan "
+    "yang dikembalikan alat ini."
+)
+
+FIND_EMPLOYEE_TOOL = {
+    "name": "find_employee",
+    "description": FIND_EMPLOYEE_DESCRIPTION,
+    "input_schema": {
+        "additionalProperties": False,
+        "properties": {
+            "name": {
+                "description": "Nama karyawan sesuai tulisan user, contoh: Imam Ihsani",
+                "minLength": 1,
+                "title": "Name",
+                "type": "string",
+            },
+        },
+        "required": ["name"],
+        "title": "FindEmployeeArgs",
+        "type": "object",
+    },
+}
+
+FIND_PROJECT_TOOL = {
+    "name": "find_project",
+    "description": (
+        "Cocokkan nama dengan daftar proyek. Panggil untuk setiap nama_proyek "
+        "sebelum create_alokasi; gunakan ejaan yang dikembalikan alat ini."
+    ),
+    "input_schema": {
+        "additionalProperties": False,
+        "properties": {
+            "name": {
+                "description": "Nama proyek sesuai tulisan user, contoh: OPRS Divisi WIN 2026",
+                "minLength": 1,
+                "title": "Name",
+                "type": "string",
+            },
+        },
+        "required": ["name"],
+        "title": "FindProjectArgs",
+        "type": "object",
+    },
+}
+
 
 def _is_real_date(value: str) -> bool:
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
@@ -139,9 +186,10 @@ def validate_arguments(arguments: str) -> list[str]:
     for name in sorted(set(args) - set(REQUIRED_FIELDS) - set(OPTIONAL_FIELDS)):
         errors.append(f"{name} bukan argumen create_alokasi")
 
-    # Optional fields: if sent at all, they must carry real content.
+    # Optional fields: if sent with a value, it must carry real content.
+    # Explicit null means the same as the key being absent, so it is accepted.
     for name in OPTIONAL_FIELDS:
-        if name in args:
+        if name in args and args[name] is not None:
             value = args[name]
             if not isinstance(value, str) or not value.strip():
                 errors.append(f"{name} kosong atau tidak diisi")

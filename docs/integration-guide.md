@@ -144,8 +144,11 @@ once per machine/venv.
    turn 2 ("ya") arrives with no memory of the summary it is confirming, and
    the conversation falls apart.
 2. Send `employees` and `projects` on **every** request. The AI side performs
-   no database lookups (PRD boundary §6) — it can only check names against the
-   lists you send.
+   no database lookups (PRD boundary §6) — those lists are the source the
+   `find_employee` / `find_project` tools match names against, so without them
+   no name can be resolved. If you send an empty list, lookups answer
+   "The employee/project list is unavailable, try again later." and
+   create_alokasi is refused outright — send the real lists on every request.
 
 ### Response — JSON body (the envelope)
 
@@ -199,10 +202,12 @@ Example (`type: "text"`, turn 1 of a confirmation):
   If one row's POST fails, that entry of `hasil_ci3` is
   `{"success": false, "message": "Baris N gagal dikirim ke ERP"}` while the
   other entries stay as the ERP returned them — render each row's own result.
-- **Names are checked by the model, not by code.** `validate_arguments()`
-  checks *formats* (dates, times, non-empty). Whether `"Imam Ihsani"` really
-  exists depends on the `employees` list you sent — which is why you must send
-  it every turn.
+- **Names are resolved through tools, then checked by code.** The model never
+  sees the full lists: it calls `find_employee` / `find_project`, which match
+  the typed name against the `employees`/`projects` you sent (difflib), and
+  only the returned spelling enters `create_alokasi`. A name that skips the
+  tools is rejected with a redirect back to them. Which is why you must send
+  both lists every turn.
 
 ---
 

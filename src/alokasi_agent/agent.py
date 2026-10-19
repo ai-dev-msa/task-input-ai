@@ -9,7 +9,15 @@ from typing import Any
 from alokasi_agent.llm import complete as default_complete
 from alokasi_agent.llm import to_openai_tools
 from alokasi_agent.prompt import build_system_prompt, parse_summary
-from alokasi_agent.schema import CREATE_ALOKASI_TOOL, validate_arguments
+from alokasi_agent.schema import (
+    CREATE_ALOKASI_TOOL,
+    FIND_EMPLOYEE_TOOL,
+    FIND_PROJECT_TOOL,
+    OPTIONAL_FIELDS,
+    validate_arguments,
+)
+
+MAX_ROUNDS = 6
 
 
 def _alokasi_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
@@ -24,6 +32,22 @@ def _alokasi_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         for tc in calls
         if (tc.get("function") or {}).get("name") == "create_alokasi"
     ]
+
+
+def _find_calls(message: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """(tool_call id, function name, name) for every find_* call in the reply."""
+    found: list[tuple[str, str, str]] = []
+    for tc in message.get("tool_calls") or []:
+        function = tc.get("function") or {}
+        if function.get("name") not in ("find_employee", "find_project"):
+            continue
+        try:
+            raw = json.loads(function.get("arguments") or "")
+        except json.JSONDecodeError:
+            raw = {}
+        value = str(raw.get("name", "")) if isinstance(raw, dict) else ""
+        found.append((tc.get("id", ""), function["name"], value.strip()))
+    return found
 
 
 def _validate_calls(calls: list[dict[str, Any]]) -> dict[str, list[str]]:
@@ -42,98 +66,66 @@ def _canonical_map(valid: Sequence[str]) -> dict[str, str]:
     return canonical
 
 
-def _list_problem(
-    values: Sequence[str],
-    valid: Sequence[str],
-    kind: str,
-    *,
-    offer_delete: bool = False,
-) -> str | None:
-    """Question when some value is missing from `valid`; None when all match.
-
-    Trim + case-insensitive match; unknown values get a close-match question.
-    `kind` is the field label in the message ("Karyawan", "Proyek",
-    "Anggota tim"). tim_pekerjaan members are employees, so the no-match
-    message says "daftar karyawan" for both the employee and tim kinds.
-    `offer_delete` adds the "hapus" option, because tim_pekerjaan is optional
-    and the user may rather drop the name than fix it.
-    """
-    if not valid:
-        return None
+def _missing_names(values: Sequence[str], valid: Sequence[str]) -> list[str]:
+    """Values with no trim+case-insensitive match in `valid` (order kept)."""
     canonical = _canonical_map(valid)
-    list_name = "proyek" if kind == "Proyek" else "karyawan"
-    lines: list[str] = []
-    for value in values:
-        if value.strip().casefold() in canonical:
-            continue
-        candidates = difflib.get_close_matches(
-            value, list(canonical.values()), n=3, cutoff=0.5
-        )
-        if len(candidates) == 1:
-            if offer_delete:
-                lines.append(
-                    f'Maksud kamu "{candidates[0]}" untuk tim, atau hapus "{value}"?'
-                )
-            else:
-                lines.append(f'Maksud kamu "{candidates[0]}"?')
-        elif candidates:
-            if offer_delete:
-                lines.append(
-                    f'{kind} "{value}" tidak ada. Pilih: '
-                    f'{", ".join(candidates)}, atau hapus "{value}"?'
-                )
-            else:
-                lines.append(
-                    f'{kind} "{value}" tidak ada. Pilih: {", ".join(candidates)}'
-                )
-        else:
-            line = f'{kind} "{value}" tidak ada di daftar {list_name}.'
-            if offer_delete:
-                line += " Hapus dari tim?"
-            lines.append(line)
-    return " ".join(lines) or None
+    return [value for value in values if value.strip().casefold() not in canonical]
 
 
-def _employee_problem(
-    calls: list[dict[str, Any]], employees: Sequence[str]
-) -> str | None:
-    """Question when a row's nama_karyawan is not in `employees`."""
-    values = [
-        str(
-            json.loads(tc["function"].get("arguments", "")).get("nama_karyawan", "")
-        ).strip()
-        for tc in calls
-    ]
-    return _list_problem(values, employees, "Karyawan")
+def _resolve_name(value: str, tool_name: str, valid: Sequence[str]) -> str:
+    """Tool result for one find_* call: match text only, never a user question.
 
-
-def _project_problem(
-    calls: list[dict[str, Any]], projects: Sequence[str]
-) -> str | None:
-    """Question when a row's nama_proyek is not in `projects`."""
-    values = [
-        str(
-            json.loads(tc["function"].get("arguments", "")).get("nama_proyek", "")
-        ).strip()
-        for tc in calls
-    ]
-    return _list_problem(values, projects, "Proyek")
-
-
-def _tim_problem(
-    calls: list[dict[str, Any]], employees: Sequence[str]
-) -> str | None:
-    """Question when a tim_pekerjaan member is not in `employees`.
-
-    The field is optional and comma-separated; empty segments are ignored.
+    The model decides what to ask the user after reading this (FR-09).
     """
-    values: list[str] = []
-    for tc in calls:
-        raw = str(
-            json.loads(tc["function"].get("arguments", "")).get("tim_pekerjaan", "")
+    kind = "project" if tool_name == "find_project" else "employee"
+    if not valid:
+        return f"The {kind} list is unavailable, try again later."
+    if not value:
+        return 'Could not read the name. Call again with {"name": "..."} as plain text.'
+    canonical = _canonical_map(valid)
+    wanted = value.strip().casefold()
+    if wanted in canonical:
+        return f"Matched: {canonical[wanted]}"
+    candidates = difflib.get_close_matches(value, list(canonical.values()), n=3, cutoff=0.5)
+    if candidates:
+        return (
+            f'No exact match for "{value}". Closest: {", ".join(candidates)}. '
+            "Ask the user which one is meant."
         )
-        values += [part.strip() for part in raw.split(",") if part.strip()]
-    return _list_problem(values, employees, "Anggota tim", offer_delete=True)
+    return f'"{value}" not found in the {kind} list. Ask the user to check the spelling.'
+
+
+def _redirect_problems(
+    calls: list[dict[str, Any]], employees: Sequence[str], projects: Sequence[str]
+) -> dict[str, str]:
+    """Per call id: the tool error that sends unresolved names back to find_*.
+
+    Empty string for a call whose names are all in the lists. Runs only after
+    FR-05 passed, so the arguments parse as a JSON object here.
+    """
+    problems: dict[str, str] = {}
+    for tc in calls:
+        args = json.loads(tc["function"].get("arguments", ""))
+        lines: list[str] = []
+        for value in _missing_names([str(args.get("nama_karyawan", ""))], employees):
+            lines.append(
+                f'Karyawan "{value}" belum dipastikan. Panggil find_employee '
+                "untuk menyelesaikannya, lalu kirim ulang create_alokasi."
+            )
+        for value in _missing_names([str(args.get("nama_proyek", ""))], projects):
+            lines.append(
+                f'Proyek "{value}" belum dipastikan. Panggil find_project '
+                "untuk menyelesaikannya, lalu kirim ulang create_alokasi."
+            )
+        tim = str(args.get("tim_pekerjaan") or "")
+        members = [part.strip() for part in tim.split(",") if part.strip()]
+        for value in _missing_names(members, employees):
+            lines.append(
+                f'Anggota tim "{value}" belum dipastikan. Panggil find_employee '
+                "untuk menyelesaikannya, atau minta user menghapusnya dari tim."
+            )
+        problems[tc.get("id", "")] = " ".join(lines)
+    return problems
 
 
 def _missing_lists_message(
@@ -169,6 +161,12 @@ def _canonicalize_row(
     """
     args = json.loads(raw)
     changed = False
+    # Explicit null means "user did not provide it"; the backend contract is
+    # an absent key, so drop those and emit the stripped JSON.
+    for name in OPTIONAL_FIELDS:
+        if name in args and args[name] is None:
+            del args[name]
+            changed = True
     for field, valid in (("nama_karyawan", employees), ("nama_proyek", projects)):
         value = str(args.get(field, ""))
         canonical = _canonical_name(value, valid)
@@ -200,11 +198,21 @@ def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def _same_rows(calls: list[dict[str, Any]], confirmed: list[dict[str, str]]) -> bool:
-    """True when the model's calls are exactly the confirmed rows (any order)."""
+    """True when the model's calls are exactly the confirmed rows (any order).
+
+    Null values count as absent: a call sending "review": null matches a
+    confirmation row without the key.
+    FR-05 already rejected null on required fields, so dropping None for
+    any key here only ever hits optionals.
+    """
 
     def canonical(rows):
+        cleaned = [
+            {k: v for k, v in row.items() if v is not None}
+            for row in rows
+        ]
         return sorted(
-            json.dumps(row, sort_keys=True, ensure_ascii=False) for row in rows
+            json.dumps(row, sort_keys=True, ensure_ascii=False) for row in cleaned
         )
 
     emitted = [json.loads(tc["function"].get("arguments", "")) for tc in calls]
@@ -226,148 +234,172 @@ def run(
 
     `complete` is an injectable function `(messages, tools) -> dict` so tests
     can pass a stub; by default it is llm.complete.
+
+    Bounded round loop: find_* calls get match results, create_alokasi calls
+    get FR-05 validation, one row-guard nudge, and up to 2 redirects back to
+    find_* for unresolved names. MAX_ROUNDS total, refusal when exhausted.
     """
     complete = complete or default_complete
-    system = build_system_prompt(
-        now or datetime.now(timezone.utc), user_name, employees, projects
-    )
+    system = build_system_prompt(now or datetime.now(timezone.utc), user_name)
     prior = list(history or [])
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system},
         *prior,
         {"role": "user", "content": raw_message},
     ]
-    tools = to_openai_tools(CREATE_ALOKASI_TOOL)
-
-    response = complete(messages, tools=tools)
-    message = response["choices"][0]["message"]
-    calls = _alokasi_calls(message)
-    errors_by_id = _validate_calls(calls)
-
-    if any(errors_by_id.values()):
-        # FR-05: retry once, handing the validation errors back to the model.
-        # The API needs a tool reply for every tool call in that assistant turn;
-        # a row that already validated gets "OK" so its id still has a reply.
-        messages = messages + [
-            {"role": "assistant", "content": message.get("content"),
-             "tool_calls": message.get("tool_calls")},
-            *[
-                {"role": "tool", "tool_call_id": tc.get("id", ""),
-                 "content": "\n".join(errors_by_id.get(tc.get("id", ""), []))
-                 or "OK"}
-                for tc in message.get("tool_calls") or []
-            ],
-        ]
-        response = complete(messages, tools=tools)
-        message = response["choices"][0]["message"]
-        calls = _alokasi_calls(message)
-        errors_by_id = _validate_calls(calls)
-
+    tools = to_openai_tools(CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL)
     confirmed = _confirmed_rows(prior)
+
+    validation_retries = 0
+    redirects = 0
+    nudged = False
     refuse_reason = ""
-    if any(errors_by_id.values()):
-        # Still malformed after the retry: refuse instead of sending a partial call.
-        errors = [
-            error for tc in calls for error in errors_by_id.get(tc.get("id", ""), [])
-        ]
-        refuse_reason = "Data tidak valid setelah dicoba ulang: " + "; ".join(errors)
-    elif calls and (missing := _missing_lists_message(employees, projects)):
-        # Fail-closed: with no list to check against, the names cannot be
-        # verified, so nothing goes to the ERP.
-        refuse_reason = missing
-    elif calls and confirmed and not _same_rows(calls, confirmed):
-        # FR-08 row guard: the summary above IS what the user confirmed, so
-        # the calls must match it exactly — count and every field. Nudge once
-        # with the confirmed rows; if they still differ, refuse rather than
-        # write rows the user never saw.
-        messages = messages + [
-            {
-                "role": "assistant",
-                "content": message.get("content"),
-                "tool_calls": message.get("tool_calls"),
-            },
-            *[
-                {"role": "tool", "tool_call_id": tc.get("id", ""), "content": "OK"}
-                for tc in message.get("tool_calls") or []
-            ],
-            {
-                "role": "user",
-                "content": (
-                    f"Konfirmasi tadi menampilkan {len(confirmed)} baris dengan "
-                    f"isi berikut:\n"
-                    f"{json.dumps(confirmed, ensure_ascii=False)}\n"
-                    f"Tapi kamu mengirim {len(calls)} panggilan atau nilainya "
-                    f"berbeda. Kirim ulang tepat {len(confirmed)} panggilan "
-                    "create_alokasi, satu per baris, persis seperti di atas."
-                ),
-            },
-        ]
+    message: dict[str, Any] = {}
+    calls: list[dict[str, Any]] = []
+
+    for _ in range(MAX_ROUNDS):
         response = complete(messages, tools=tools)
         message = response["choices"][0]["message"]
+
+        finds = _find_calls(message)
+        if finds:
+            # Every tool call id in this turn gets a reply: find_* carries the
+            # match result, a create_alokasi riding along gets "OK" and is only
+            # acted on if the model sends it again in a later round.
+            results = {
+                fid: _resolve_name(
+                    name, tool, employees if tool == "find_employee" else projects
+                )
+                for fid, tool, name in finds
+            }
+            messages = messages + [
+                {
+                    "role": "assistant",
+                    "content": message.get("content"),
+                    "tool_calls": message.get("tool_calls"),
+                },
+                *[
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "content": results.get(tc.get("id", ""), "OK"),
+                    }
+                    for tc in message.get("tool_calls") or []
+                ],
+            ]
+            continue
+
         calls = _alokasi_calls(message)
         errors_by_id = _validate_calls(calls)
-        # Short-circuit: with any error present the calls do not all parse,
-        # so _same_rows must not run.
-        if any(errors_by_id.values()) or not _same_rows(calls, confirmed):
-            refuse_reason = (
-                f"Isi alokasi tidak sesuai konfirmasi ({len(calls)} panggilan vs "
-                f"{len(confirmed)} baris, atau nilainya berbeda). "
-                "Tidak ada data yang dikirim."
-            )
 
-    if refuse_reason:
-        envelope = {
-            "success": False,
-            "type": "error",
-            "function_name": "",
-            "arguments": "",
-            "raw_message": raw_message,
-            "user_id": user_id,
-            "reply": refuse_reason,
-        }
-        history_content = refuse_reason
-    elif calls and (employee_question := _employee_problem(calls, employees)):
-        # List miss: ask instead of writing (never a function_call).
-        envelope = {
-            "success": True,
-            "type": "text",
-            "function_name": "",
-            "arguments": "",
-            "raw_message": raw_message,
-            "user_id": user_id,
-            "reply": employee_question,
-        }
-        history_content = employee_question
-    elif calls and (project_question := _project_problem(calls, projects)):
-        # List miss: ask instead of writing (never a function_call).
-        envelope = {
-            "success": True,
-            "type": "text",
-            "function_name": "",
-            "arguments": "",
-            "raw_message": raw_message,
-            "user_id": user_id,
-            "reply": project_question,
-        }
-        history_content = project_question
-    elif calls and (tim_question := _tim_problem(calls, employees)):
-        # List miss: ask instead of writing (never a function_call). The
-        # question also offers to drop the name, since tim is optional.
-        envelope = {
-            "success": True,
-            "type": "text",
-            "function_name": "",
-            "arguments": "",
-            "raw_message": raw_message,
-            "user_id": user_id,
-            "reply": tim_question,
-        }
-        history_content = tim_question
-    elif calls:
-        # One row keeps the model's object string (PRD sample shape unchanged);
-        # several rows become a JSON array string the backend iterates (FR-08).
-        # Names are rewritten to the exact list spellings first; a row that
-        # was already canonical keeps its original string.
+        if any(errors_by_id.values()):
+            # FR-05: retry once, handing the validation errors back to the model.
+            if validation_retries >= 1:
+                errors = [
+                    error
+                    for tc in calls
+                    for error in errors_by_id.get(tc.get("id", ""), [])
+                ]
+                refuse_reason = (
+                    "Data tidak valid setelah dicoba ulang: " + "; ".join(errors)
+                )
+                break
+            validation_retries += 1
+            messages = messages + [
+                {
+                    "role": "assistant",
+                    "content": message.get("content"),
+                    "tool_calls": message.get("tool_calls"),
+                },
+                *[
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "content": "\n".join(errors_by_id.get(tc.get("id", ""), []))
+                        or "OK",
+                    }
+                    for tc in message.get("tool_calls") or []
+                ],
+            ]
+            continue
+
+        if not calls:
+            break  # plain text reply (or only unknown tool names) -> text envelope
+
+        if missing := _missing_lists_message(employees, projects):
+            # Fail-closed: with no list to check against, nothing reaches the ERP.
+            refuse_reason = missing
+            break
+
+        if confirmed and not _same_rows(calls, confirmed):
+            # FR-08 row guard: nudge once with the confirmed rows, refuse after.
+            if nudged:
+                refuse_reason = (
+                    f"Isi alokasi tidak sesuai konfirmasi ({len(calls)} panggilan vs "
+                    f"{len(confirmed)} baris, atau nilainya berbeda). "
+                    "Tidak ada data yang dikirim."
+                )
+                break
+            nudged = True
+            messages = messages + [
+                {
+                    "role": "assistant",
+                    "content": message.get("content"),
+                    "tool_calls": message.get("tool_calls"),
+                },
+                *[
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "content": "OK",
+                    }
+                    for tc in message.get("tool_calls") or []
+                ],
+                {
+                    "role": "user",
+                    "content": (
+                        f"Konfirmasi tadi menampilkan {len(confirmed)} baris dengan "
+                        f"isi berikut:\n"
+                        f"{json.dumps(confirmed, ensure_ascii=False)}\n"
+                        f"Tapi kamu mengirim {len(calls)} panggilan atau nilainya "
+                        f"berbeda. Kirim ulang tepat {len(confirmed)} panggilan "
+                        "create_alokasi, satu per baris, persis seperti di atas."
+                    ),
+                },
+            ]
+            continue
+
+        problems = _redirect_problems(calls, employees, projects)
+        if any(problems.values()):
+            # Fail closed: unresolved names go back to the model as a redirect
+            # to find_* instead of a user-facing question (max 2 rounds).
+            if redirects >= 2:
+                refuse_reason = (
+                    "Nama belum dapat dipastikan setelah beberapa percobaan. "
+                    "Tidak ada data yang dikirim."
+                )
+                break
+            redirects += 1
+            messages = messages + [
+                {
+                    "role": "assistant",
+                    "content": message.get("content"),
+                    "tool_calls": message.get("tool_calls"),
+                },
+                *[
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "content": problems.get(tc.get("id", ""), "") or "OK",
+                    }
+                    for tc in message.get("tool_calls") or []
+                ],
+            ]
+            continue
+
+        # Accept: one row keeps the model's object string (PRD sample shape
+        # unchanged); several rows become a JSON array string (FR-08). Names
+        # are rewritten to the exact list spellings first.
         rows = [
             _canonicalize_row(tc["function"]["arguments"], employees, projects)
             for tc in calls
@@ -385,6 +417,32 @@ def run(
             "reply": message.get("content"),
         }
         history_content = message.get("content") or ""
+        new_history = [
+            *prior,
+            {"role": "user", "content": raw_message},
+            {"role": "assistant", "content": history_content},
+        ]
+        envelope["history"] = new_history
+        return envelope, new_history
+    else:
+        # Loop used up MAX_ROUNDS without a decision (e.g. the model keeps
+        # calling find_* without ever emitting create_alokasi).
+        if not refuse_reason:
+            refuse_reason = (
+                "Percobaan terlalu banyak tanpa hasil. Tidak ada data yang dikirim."
+            )
+
+    if refuse_reason:
+        envelope = {
+            "success": False,
+            "type": "error",
+            "function_name": "",
+            "arguments": "",
+            "raw_message": raw_message,
+            "user_id": user_id,
+            "reply": refuse_reason,
+        }
+        history_content = refuse_reason
     else:
         envelope = {
             "success": True,

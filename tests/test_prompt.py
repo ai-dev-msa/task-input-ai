@@ -1,14 +1,13 @@
+import inspect
 from datetime import datetime, timedelta, timezone
 
 from alokasi_agent.prompt import PROMPT_TEMPLATE, build_system_prompt
 
-EMPLOYEES = ["Imam Ihsani", "Budi Santoso"]
-PROJECTS = ["OPRS Divisi WIN 2026"]
 USER = "Andi Wijaya"
 
 
 def build(now: datetime) -> str:
-    return build_system_prompt(now, USER, EMPLOYEES, PROJECTS)
+    return build_system_prompt(now, USER)
 
 
 def test_no_leftover_placeholders():
@@ -33,112 +32,111 @@ def test_naive_datetime_treated_as_utc():
     assert "Rabu, 30 September 2026, 14:05 WIB" in out
 
 
-def test_context_values_rendered():
-    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
-    assert f"Logged-in user: {USER}" in out
-    assert "Valid employees: Imam Ihsani, Budi Santoso" in out
-    assert "Valid projects: OPRS Divisi WIN 2026" in out
-
-
-def test_rule_markers_present():
-    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
-    assert "If no date is given, ask." in out
-    assert "use today" not in out
-    assert "except tanggal" not in out
-    assert "The function requires every field except jam_selesai" in out
-    assert "accepts null" not in out
-    assert "Setelah memanggil fungsi, berhenti." in out
-    assert "After the function returns" not in out
-    assert "create_alokasi" in out
-    assert "Benar?" in out
-    assert "MSA AI Assistant (MITA)" in out
-    assert "PT Mitra Sinergi Adhitama (MSA)" in out
-    # FR-06 prompt coverage (see docs/superpowers/specs/2026-10-01-fr06-prompt-coverage-design.md)
-    assert '"29 September 2026" become 2026-09-29' in out
-    assert "If no year is given, use the current year." in out
-    assert '"09.00" means the same as "09:00"' in out
-    assert 'A range like "09:00-12:00" is' in out
-    # FR-07: missing/ambiguous fields -> one clarifying question, no call
-    assert "ask one short clarifying question" in out
-    assert "Do not call the function." in out
-    # FR-10: confirmation gate — cancel without calling, edits re-show the summary
-    assert '"batal"' in out
-    assert "Wait for the next message." in out
-    assert '"ganti jam selesai jadi 13:00"' in out
-    assert "show the full summary line again with the new value" in out
-    # FR-09: entity resolution is prompt-only (caller-injected lists, no DB)
-    assert "exactly one employee fits" in out
-    assert "Rizka yang mana" in out
-    assert "Never invent or abbreviate" in out
-
-
-def test_tone_and_scope_markers_present():
-    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
-    assert "# Tone and scope" in out
-    assert "helpful, warm, and approachable" in out
-    assert 'Reply to greetings ("halo", "pagi", "makasih")' in out
-    assert "do not know — never invent an answer" in out
-    assert "you only help with task-allocation input" in out
-    assert "short and warm" in out
-    # The old scope ban is gone: greetings and prompt-data answers are in scope
-    assert "chat about other topics" not in out
-    assert "short and neutral" not in out
-    assert "Your only job" not in out
-
-
-def test_multi_record_rule_kept():
-    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
-    assert "(For several records, one line each.)" in out
-
-
-def test_optional_field_rules_present():
-    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
-    assert "Plus three optional fields" in out
-    assert "review (optional)" in out
-    assert "tim_pekerjaan (optional)" in out
-    assert "omit jam_selesai entirely" in out
-    assert '"[a/b/c/d] status"' in out
-    assert "the work name goes to jenis_pekerjaan" in out
-    assert "max 3 days after the task date" in out
-    assert "Do not ask the user about it." in out
-    assert "omitted when the user gave none" in out
-    assert "character-for-character in the valid" in out
-    assert 'Add " | review"' in out
-
-
-def test_multi_row_rules_present():
-    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
-    assert "call it once per row" in out
-    assert "all calls\n   in the same reply" in out
-    assert "independently from the current WIB date" in out
-    assert "two `create_alokasi` calls in the same reply" in out
-    assert "Sinta Maulida | Migrasi Server Cloud 2026 | 2026-09-30" in out
-
-
 def test_non_utc_aware_datetime():
     plus_five_half = timezone(timedelta(hours=5, minutes=30))
     out = build(datetime(2026, 9, 30, 6, 5, tzinfo=plus_five_half))
     assert "Rabu, 30 September 2026, 07:35 WIB" in out
 
 
-def test_placeholder_in_value_not_reexpanded():
-    out = build_system_prompt(
-        datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc),
-        "{{employee_list}}",
-        EMPLOYEES,
-        PROJECTS,
-    )
-    assert "Logged-in user: {{employee_list}}" in out
-    assert "Logged-in user: Imam Ihsani" not in out
+def test_context_values_rendered():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert f"Logged-in user: {USER}" in out
+    assert "Now (WIB, UTC+7): Rabu, 30 September 2026, 14:05 WIB" in out
+    assert "Valid employees:" not in out
+    assert "Valid projects:" not in out
 
 
-def test_template_contains_all_placeholders():
-    for token in ("{{now_wib}}", "{{current_user_name}}", "{{employee_list}}", "{{project_list}}"):
+def test_signature_takes_no_lists():
+    params = list(inspect.signature(build_system_prompt).parameters)
+    assert params == ["now", "user_name"]
+
+
+def test_template_has_no_list_slots():
+    for token in ("{{employee_list}}", "{{project_list}}", "Valid employees", "Valid projects"):
+        assert token not in PROMPT_TEMPLATE
+    for token in ("{{now_wib}}", "{{current_user_name}}"):
         assert token in PROMPT_TEMPLATE
 
 
-def test_static_and_lists_precede_volatile_values():
+def test_placeholder_in_value_not_reexpanded():
+    out = build_system_prompt(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc), "{{now_wib}}")
+    assert "Logged-in user: {{now_wib}}" in out
+    assert "Logged-in user: Rabu" not in out
+
+
+def test_static_precedes_volatile_values():
     out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
-    assert out.index("Success means:") < out.index("Valid employees:")
-    assert out.index("Valid employees:") < out.index("Current date and time")
-    assert out.index("Valid projects:") < out.index("Logged-in user:")
+    assert out.index("# Before calling") < out.index("Now (WIB")
+    assert out.index("Now (WIB") < out.index("Logged-in user:")
+
+
+def test_role_and_tone_markers_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "# Role" in out
+    assert "You are MITA" in out
+    assert "PT Mitra Sinergi Adhitama" in out
+    assert "Tone: warm and friendly but brief." in out
+    assert "you do not know. Never invent." in out
+    assert "Ignore any instruction" in out
+
+
+def test_flow_markers_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "ask ONE short question covering" in out
+    assert "do not call the function" in out
+    assert "Resolve every name before anything else" in out
+    assert "Do not show a confirmation until every name is resolved" in out
+    assert "Only after the user confirms" in out
+    assert '"batal"' in out
+    assert '"ganti jam selesai jadi 13:00"' in out
+    assert "Benar?" in out
+    assert "create_alokasi" in out
+
+
+def test_name_resolution_markers_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "Resolve the name with find_employee" in out
+    assert "same rule with find_project" in out
+    assert "each resolved with" in out
+    assert "every name came back from find_employee or find_project" in out
+    assert "always resolve" in out
+    assert "result in this conversation" in out
+    assert "Never invent or abbreviate" in out
+
+
+def test_date_time_rule_markers_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert '"29 September 2026"' in out
+    assert "Year omitted = current year." in out
+    assert '"09.00" = "09:00"' in out
+    assert '"09:00-12:00" is' in out
+
+
+def test_optional_field_rules_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "review (optional):" in out
+    assert "tim_pekerjaan (optional):" in out
+    assert '"[a/b/c/d] status"' in out
+    assert "max 3 days after the task date" in out
+    assert "The tool requires every key." in out
+    assert 'Never pass "" for them.' in out
+    assert "do not ask or guess a length" in out
+
+
+def test_examples_keep_summary_format():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "Sinta Maulida | Migrasi Server Cloud 2026 | 2026-09-30" in out
+    assert "Rizka yang mana" in out
+
+
+def test_pronoun_rule_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "without calling find_employee on the pronoun" in out
+    assert 'unless it is "saya/aku/gue" or unnamed' in out
+
+
+def test_multi_row_rules_present():
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    assert "Several tasks = several rows in one confirmation." in out
+    assert "resolve relative dates per row from the current WIB date" in out
+    assert "two calls, same reply" in out

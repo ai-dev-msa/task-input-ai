@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from alokasi_agent.llm import complete, to_openai_tools
 from alokasi_agent.prompt import build_system_prompt
-from alokasi_agent.schema import CREATE_ALOKASI_TOOL
+from alokasi_agent.schema import CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL
 
 EXAMPLE_MESSAGE = (
     "Isikan alokasi untuk Imam Ihsani tanggal 29 September 2026 dengan pekerjaan "
@@ -52,12 +52,12 @@ def build_request(
     employees: list[str],
     projects: list[str],
 ) -> tuple[list[dict], list[dict]]:
-    system = build_system_prompt(datetime.now(timezone.utc), user, employees, projects)
+    system = build_system_prompt(datetime.now(timezone.utc), user)
     messages: list[dict] = [
         {"role": "system", "content": system},
         {"role": "user", "content": EXAMPLE_MESSAGE},
     ]
-    return messages, to_openai_tools(CREATE_ALOKASI_TOOL)
+    return messages, to_openai_tools(CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL)
 
 
 def main() -> int:

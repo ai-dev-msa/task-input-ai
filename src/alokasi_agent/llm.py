@@ -47,7 +47,7 @@ def complete(
     return client.chat.completions.create(**kwargs).model_dump()
 
 
-def to_openai_tools(tool: dict[str, Any]) -> list[dict[str, Any]]:
+def to_openai_tools(*tools: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {
             "type": "function",
@@ -57,4 +57,5 @@ def to_openai_tools(tool: dict[str, Any]) -> list[dict[str, Any]]:
                 "parameters": tool["input_schema"],
             },
         }
+        for tool in tools
     ]

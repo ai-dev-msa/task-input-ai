@@ -1,41 +1,41 @@
 {
   "metrics": {
-    "decision_correct": 52,
-    "decision_total": 83,
-    "decision_accuracy": 0.6265060240963856,
+    "decision_correct": 56,
+    "decision_total": 85,
+    "decision_accuracy": 0.6588235294117647,
     "row_exact": 42,
-    "row_total": 69,
-    "row_exact_rate": 0.6086956521739131,
-    "field_correct": 306,
-    "field_total": 473,
-    "field_accuracy": 0.6469344608879493,
+    "row_total": 71,
+    "row_exact_rate": 0.5915492957746479,
+    "field_correct": 292,
+    "field_total": 482,
+    "field_accuracy": 0.6058091286307054,
     "ask_expected": 12,
-    "ask_predicted": 25,
-    "ask_correct": 7,
-    "ask_precision": 0.28,
-    "ask_recall": 0.5833333333333334,
-    "optional_correct": 7,
+    "ask_predicted": 30,
+    "ask_correct": 11,
+    "ask_precision": 0.36666666666666664,
+    "ask_recall": 0.9166666666666666,
+    "optional_correct": 2,
     "optional_total": 10,
-    "optional_field_recall": 0.7,
+    "optional_field_recall": 0.2,
     "api_error_count": 0,
     "confusion": {
       "call": {
         "call": 20,
-        "confirm": 5,
-        "ask": 5,
-        "other": 3
+        "confirm": 2,
+        "ask": 7,
+        "other": 5
       },
       "confirm": {
         "call": 0,
         "confirm": 23,
-        "ask": 13,
-        "other": 0
+        "ask": 12,
+        "other": 2
       },
       "ask": {
         "call": 0,
         "confirm": 1,
-        "ask": 7,
-        "other": 4
+        "ask": 11,
+        "other": 0
       },
       "other": {
         "call": 0,
@@ -46,71 +46,71 @@
     },
     "per_category": {
       "time_format": {
-        "decision_correct": 6,
+        "decision_correct": 8,
         "decision_total": 11,
-        "row_exact": 7,
+        "row_exact": 8,
         "row_total": 10,
-        "field_correct": 42,
+        "field_correct": 48,
         "field_total": 60
       },
       "relative_date": {
-        "decision_correct": 2,
+        "decision_correct": 6,
         "decision_total": 8,
-        "row_exact": 3,
+        "row_exact": 6,
         "row_total": 8,
-        "field_correct": 18,
+        "field_correct": 36,
         "field_total": 48
       },
       "happy_path": {
-        "decision_correct": 4,
+        "decision_correct": 6,
         "decision_total": 6,
-        "row_exact": 4,
+        "row_exact": 6,
         "row_total": 6,
-        "field_correct": 24,
+        "field_correct": 36,
         "field_total": 36
       },
       "entity_resolution": {
-        "decision_correct": 5,
+        "decision_correct": 3,
         "decision_total": 9,
-        "row_exact": 5,
+        "row_exact": 1,
         "row_total": 6,
-        "field_correct": 30,
+        "field_correct": 6,
         "field_total": 36
       },
       "assignee_logic": {
+        "decision_correct": 2,
+        "decision_total": 6,
+        "row_exact": 2,
+        "row_total": 6,
+        "field_correct": 12,
+        "field_total": 36
+      },
+      "missing_field": {
+        "decision_correct": 6,
+        "decision_total": 6,
+        "row_exact": 2,
+        "row_total": 2,
+        "field_correct": 10,
+        "field_total": 10
+      },
+      "review_and_team": {
+        "decision_correct": 3,
+        "decision_total": 11,
+        "row_exact": 2,
+        "row_total": 10,
+        "field_correct": 20,
+        "field_total": 70
+      },
+      "multi_allocation": {
         "decision_correct": 4,
         "decision_total": 6,
         "row_exact": 4,
         "row_total": 6,
-        "field_correct": 24,
-        "field_total": 36
-      },
-      "missing_field": {
-        "decision_correct": 4,
-        "decision_total": 4,
-        "row_exact": 0,
-        "row_total": 0,
-        "field_correct": 0,
-        "field_total": 0
-      },
-      "review_and_team": {
-        "decision_correct": 7,
-        "decision_total": 11,
-        "row_exact": 3,
-        "row_total": 10,
-        "field_correct": 41,
-        "field_total": 71
-      },
-      "multi_allocation": {
-        "decision_correct": 2,
-        "decision_total": 6,
-        "row_exact": 3,
-        "row_total": 6,
-        "field_correct": 36,
+        "field_correct": 48,
         "field_total": 72
       },
       "invalid_time": {
-        "decision_correct": 1,
+        "decision_correct": 2,
         "decision_total": 2,
         "row_exact": 0,
         "row_total": 0,
@@ -118,19 +118,19 @@
         "field_total": 0
       },
       "confirmation_flow": {
-        "decision_correct": 8,
+        "decision_correct": 9,
         "decision_total": 11,
         "row_exact": 7,
         "row_total": 9,
-        "field_correct": 45,
+        "field_correct": 42,
         "field_total": 66
       },
       "noisy_input": {
-        "decision_correct": 6,
+        "decision_correct": 4,
         "decision_total": 6,
-        "row_exact": 4,
+        "row_exact": 2,
         "row_total": 6,
-        "field_correct": 34,
+        "field_correct": 22,
         "field_total": 36
       },
       "out_of_scope": {
@@ -141,7 +141,12 @@
         "field_correct": 12,
         "field_total": 12
       }
-    }
+    },
+    "prompt_tokens": 424502,
+    "completion_tokens": 5825,
+    "total_tokens": 430327,
+    "cached_tokens": 422654,
+    "llm_calls": 138
   },
   "cases": {
     "timefmt-002": {
@@ -155,14 +160,14 @@
       "score": 1.0
     },
     "timefmt-003": {
-      "decision_correct": 0,
+      "decision_correct": 2,
       "decision_total": 2,
-      "row_exact": 1,
+      "row_exact": 2,
       "row_total": 2,
-      "field_correct": 6,
+      "field_correct": 12,
       "field_total": 12,
       "api_errors": 0,
-      "score": 0.4375
+      "score": 1.0
     },
     "timefmt-004": {
       "decision_correct": 2,
@@ -205,24 +210,24 @@
       "score": 0.0
     },
     "reldate-003": {
-      "decision_correct": 0,
+      "decision_correct": 2,
       "decision_total": 2,
-      "row_exact": 1,
+      "row_exact": 2,
       "row_total": 2,
-      "field_correct": 6,
+      "field_correct": 12,
       "field_total": 12,
       "api_errors": 0,
-      "score": 0.4375
+      "score": 1.0
     },
     "reldate-004": {
-      "decision_correct": 0,
+      "decision_correct": 2,
       "decision_total": 2,
-      "row_exact": 0,
+      "row_exact": 2,
       "row_total": 2,
-      "field_correct": 0,
+      "field_correct": 12,
       "field_total": 12,
       "api_errors": 0,
-      "score": 0.0
+      "score": 1.0
     },
     "reldate-005": {
       "decision_correct": 2,
@@ -255,14 +260,14 @@
       "score": 1.0
     },
     "happy-003": {
-      "decision_correct": 0,
+      "decision_correct": 2,
       "decision_total": 2,
-      "row_exact": 0,
+      "row_exact": 2,
       "row_total": 2,
-      "field_correct": 0,
+      "field_correct": 12,
       "field_total": 12,
       "api_errors": 0,
-      "score": 0.0
+      "score": 1.0
     },
     "happy-004": {
       "decision_correct": 2,
@@ -275,24 +280,24 @@
       "score": 1.0
     },
     "entity-002": {
-      "decision_correct": 2,
+      "decision_correct": 0,
       "decision_total": 2,
-      "row_exact": 2,
+      "row_exact": 0,
       "row_total": 2,
-      "field_correct": 12,
+      "field_correct": 0,
       "field_total": 12,
       "api_errors": 0,
-      "score": 1.0
+      "score": 0.0
     },
     "entity-003": {
-      "decision_correct": 2,
+      "decision_correct": 0,
       "decision_total": 2,
-      "row_exact": 2,
+      "row_exact": 0,
       "row_total": 2,
-      "field_correct": 12,
+      "field_correct": 0,
       "field_total": 12,
       "api_errors": 0,
-      "score": 1.0
+      "score": 0.0
     },
     "entity-004": {
       "decision_correct": 0,
@@ -305,24 +310,24 @@
       "score": 0.4375
     },
     "entity-005": {
-      "decision_correct": 0,
+      "decision_correct": 1,
       "decision_total": 1,
       "row_exact": 0,
       "row_total": 0,
       "field_correct": 0,
       "field_total": 0,
       "api_errors": 0,
-      "score": 0.0
+      "score": 1.0
     },
     "entity-006": {
-      "decision_correct": 0,
+      "decision_correct": 1,
       "decision_total": 1,
       "row_exact": 0,
       "row_total": 0,
       "field_correct": 0,
       "field_total": 0,
       "api_errors": 0,
-      "score": 0.0
+      "score": 1.0
     },
     "entity-007": {
       "decision_correct": 1,
@@ -335,14 +340,14 @@
       "score": 1.0
     },
     "assignee-001": {
-      "decision_correct": 2,
+      "decision_correct": 0,
       "decision_total": 2,
-      "row_exact": 2,
+      "row_exact": 0,
       "row_total": 2,
-      "field_correct": 12,
+      "field_correct": 0,
       "field_total": 12,
       "api_errors": 0,
-      "score": 1.0
+      "score": 0.0
     },
     "assignee-002": {
       "decision_correct": 0,
@@ -395,34 +400,34 @@
       "score": 1.0
     },
     "missing-005": {
-      "decision_correct": 1,
-      "decision_total": 1,
-      "row_exact": 0,
-      "row_total": 0,
-      "field_correct": 0,
-      "field_total": 0,
+      "decision_correct": 2,
+      "decision_total": 2,
+      "row_exact": 2,
+      "row_total": 2,
+      "field_correct": 10,
+      "field_total": 10,
       "api_errors": 0,
       "score": 1.0
     },
     "review-002": {
-      "decision_correct": 2,
+      "decision_correct": 0,
       "decision_total": 2,
       "row_exact": 0,
       "row_total": 2,
-      "field_correct": 14,
+      "field_correct": 0,
       "field_total": 16,
       "api_errors": 0,
-      "score": 0.8
+      "score": 0.0
     },
     "review-003": {
       "decision_correct": 0,
       "decision_total": 2,
       "row_exact": 0,
       "row_total": 2,
-      "field_correct": 0,
+      "field_correct": 6,
       "field_total": 14,
       "api_errors": 0,
-      "score": 0.0
+      "score": 0.3333
     },
     "review-004": {
       "decision_correct": 0,
@@ -435,14 +440,14 @@
       "score": 0.0
     },
     "review-005": {
-      "decision_correct": 2,
+      "decision_correct": 0,
       "decision_total": 2,
-      "row_exact": 1,
+      "row_exact": 0,
       "row_total": 2,
-      "field_correct": 13,
-      "field_total": 15,
+      "field_correct": 0,
+      "field_total": 14,
       "api_errors": 0,
-      "score": 0.8421
+      "score": 0.0
     },
     "review-006": {
       "decision_correct": 1,
@@ -465,14 +470,14 @@
       "score": 1.0
     },
     "multi-003": {
-      "decision_correct": 0,
+      "decision_correct": 2,
       "decision_total": 2,
-      "row_exact": 1,
+      "row_exact": 2,
       "row_total": 2,
-      "field_correct": 12,
+      "field_correct": 24,
       "field_total": 24,
       "api_errors": 0,
-      "score": 0.4643
+      "score": 1.0
     },
     "multi-004": {
       "decision_correct": 2,
@@ -505,14 +510,14 @@
       "score": 1.0
     },
     "invtime-003": {
-      "decision_correct": 0,
+      "decision_correct": 1,
       "decision_total": 1,
       "row_exact": 0,
       "row_total": 0,
       "field_correct": 0,
       "field_total": 0,
       "api_errors": 0,
-      "score": 0.0
+      "score": 1.0
     },
     "confirm-002": {
       "decision_correct": 2,
@@ -535,24 +540,24 @@
       "score": 1.0
     },
     "confirm-004": {
-      "decision_correct": 3,
+      "decision_correct": 4,
       "decision_total": 4,
       "row_exact": 3,
       "row_total": 3,
       "field_correct": 18,
       "field_total": 18,
       "api_errors": 0,
-      "score": 0.96
+      "score": 1.0
     },
     "confirm-005": {
       "decision_correct": 0,
       "decision_total": 2,
       "row_exact": 0,
       "row_total": 2,
-      "field_correct": 3,
+      "field_correct": 0,
       "field_total": 24,
       "api_errors": 0,
-      "score": 0.1071
+      "score": 0.0
     },
     "noisy-001": {
       "decision_correct": 2,
@@ -565,14 +570,14 @@
       "score": 1.0
     },
     "noisy-002": {
-      "decision_correct": 2,
+      "decision_correct": 0,
       "decision_total": 2,
-      "row_exact": 2,
+      "row_exact": 0,
       "row_total": 2,
-      "field_correct": 12,
+      "field_correct": 0,
       "field_total": 12,
       "api_errors": 0,
-      "score": 1.0
+      "score": 0.0
     },
     "noisy-003": {
       "decision_correct": 2,
@@ -601,6 +606,16 @@
       "row_total": 2,
       "field_correct": 12,
       "field_total": 12,
+      "api_errors": 0,
+      "score": 1.0
+    },
+    "missing-006": {
+      "decision_correct": 1,
+      "decision_total": 1,
+      "row_exact": 0,
+      "row_total": 0,
+      "field_correct": 0,
+      "field_total": 0,
       "api_errors": 0,
       "score": 1.0
     }

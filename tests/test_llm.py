@@ -144,3 +144,17 @@ def test_to_openai_tools_converts_provider_neutral_contract():
     assert function["name"] == "create_alokasi"
     assert function["description"] == CREATE_ALOKASI_TOOL["description"]
     assert function["parameters"] == CREATE_ALOKASI_TOOL["input_schema"]
+
+
+from alokasi_agent.schema import FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL
+
+
+def test_to_openai_tools_accepts_multiple_tools():
+    tools = to_openai_tools(CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL)
+    assert [t["function"]["name"] for t in tools] == [
+        "create_alokasi",
+        "find_employee",
+        "find_project",
+    ]
+    assert all(t["type"] == "function" for t in tools)
+    assert tools[1]["function"]["parameters"] == FIND_EMPLOYEE_TOOL["input_schema"]

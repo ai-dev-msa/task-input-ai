@@ -2,8 +2,9 @@ import json
 from datetime import datetime, timezone
 
 from alokasi_agent import run
+from alokasi_agent.agent import _find_calls, _resolve_name
 from alokasi_agent.llm import to_openai_tools
-from alokasi_agent.schema import CREATE_ALOKASI_TOOL
+from alokasi_agent.schema import CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL
 
 EXAMPLE_MESSAGE = (
     "Isikan alokasi untuk Imam Ihsani tanggal 29 September 2026 dengan pekerjaan "
@@ -164,6 +165,19 @@ def tool_reply_multi(arguments_list):
     }
 
 
+def find_reply(tool_name, name, call_id="call_f1"):
+    return {
+        "content": None,
+        "tool_calls": [
+            {
+                "id": call_id,
+                "type": "function",
+                "function": {"name": tool_name, "arguments": json.dumps({"name": name})},
+            }
+        ],
+    }
+
+
 def test_multiple_rows_produce_array_arguments():
     calls = []
     reply = tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS])
@@ -226,20 +240,23 @@ def test_text_reply_with_none_content_normalizes_history():
     assert history[1] == {"role": "assistant", "content": ""}
 
 
-def test_system_prompt_carries_injected_context():
+def test_system_prompt_never_carries_the_lists():
     calls = []
     call_run(make_stub([text_reply("ok")], calls))
     system = calls[0]["messages"][0]
     assert system["role"] == "system"
     assert "Rabu, 30 September 2026, 14:05 WIB" in system["content"]
     assert f"Logged-in user: {USER}" in system["content"]
-    assert "Valid employees: Imam Ihsani, Budi Santoso" in system["content"]
+    assert "Valid employees" not in system["content"]
+    assert "Valid projects" not in system["content"]
 
 
 def test_tools_attached_match_contract():
     calls = []
     call_run(make_stub([text_reply("ok")], calls))
-    assert calls[0]["tools"] == to_openai_tools(CREATE_ALOKASI_TOOL)
+    assert calls[0]["tools"] == to_openai_tools(
+        CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL
+    )
 
 
 def test_history_defaults_are_independent():
@@ -353,30 +370,27 @@ def test_partial_message_then_answer_produces_complete_call():
     assert [turn["role"] for turn in history2] == ["user", "assistant", "user", "assistant"]
 
 
-# --- project list validation (server-fetched lists) ---
-
-def test_unknown_project_becomes_question_not_call():
-    args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "OPRS WIN")
+def test_null_optional_fields_are_accepted_and_stripped():
+    args = json.loads(SAMPLE_ARGUMENTS)
+    args["review"] = None
+    args["tim_pekerjaan"] = None
     calls = []
-    env, history = call_run(make_stub([tool_reply(arguments=args)], calls))
-    assert env["success"] is True
-    assert env["type"] == "text"
-    assert env["function_name"] == ""
-    assert env["arguments"] == ""
-    assert env["reply"] == 'Maksud kamu "OPRS Divisi WIN 2026"?'
-    assert "OPRS Divisi WIN 2026" in env["reply"]
-    assert len(calls) == 1  # list misses are not retried
-    assert history[-1]["content"] == env["reply"]
-
-
-def test_unknown_project_blocks_whole_batch():
-    bad = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "Proyek Fiktif")
-    calls = []
-    env, _ = call_run(make_stub([tool_reply_multi([SAMPLE_ARGUMENTS, bad])], calls))
-    assert env["type"] == "text"
-    assert env["reply"] == 'Proyek "Proyek Fiktif" tidak ada di daftar proyek.'
+    stub = make_stub(
+        [tool_reply(arguments=json.dumps(args)),
+         tool_reply()],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["type"] == "function_call"
+    final = json.loads(env["arguments"])
+    assert "review" not in final
+    assert "tim_pekerjaan" not in final
+    assert final["nama_karyawan"] == "Imam Ihsani"
+    # One round only: an explicit null is absent, not an FR-05 error.
     assert len(calls) == 1
 
+
+# --- project list validation (server-fetched lists) ---
 
 def test_project_match_ignores_case_and_padding():
     args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "  oprs divisi win 2026 ")
@@ -394,25 +408,6 @@ def test_empty_projects_list_blocks_call():
     assert env["reply"] == "Daftar proyek tidak tersedia, coba lagi."
 
 
-def test_no_close_candidate_still_asks():
-    args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "zzz qqq")
-    env, _ = call_run(make_stub([tool_reply(arguments=args)], []))
-    assert env["type"] == "text"
-    assert env["reply"] == 'Proyek "zzz qqq" tidak ada di daftar proyek.'
-    assert "Kandidat:" not in env["reply"]
-
-
-def test_multiple_candidates_offer_a_choice():
-    args = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "OPRS Divisi")
-    projects = ["OPRS Divisi IT 2026", "OPRS Divisi HRD 2026", "OPRS Divisi WIN 2026"]
-    env, _ = call_run(make_stub([tool_reply(arguments=args)], []), projects=projects)
-    assert env["type"] == "text"
-    assert env["reply"].startswith('Proyek "OPRS Divisi" tidak ada. Pilih:')
-    assert "OPRS Divisi IT 2026" in env["reply"]
-    assert "OPRS Divisi HRD 2026" in env["reply"]
-    assert "Maksud kamu" not in env["reply"]
-
-
 def test_post_retry_invalid_json_still_refuses():
     calls = []
     stub = make_stub(
@@ -425,29 +420,179 @@ def test_post_retry_invalid_json_still_refuses():
     assert len(calls) == 2
 
 
-# --- employee list validation (server-fetched lists) ---
+# --- membership now redirects to find_* (fail closed) ---
 
-def test_unknown_employee_becomes_question_not_call():
-    args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Imam")
+def test_unknown_project_redirects_to_find_project():
+    bad = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "OPRS WIN")
     calls = []
-    env, history = call_run(make_stub([tool_reply(arguments=args)], calls))
-    assert env["success"] is True
+    stub = make_stub(
+        [tool_reply(arguments=bad),
+         find_reply("find_project", "OPRS WIN"),
+         tool_reply()],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["type"] == "function_call"
+    assert env["arguments"] == SAMPLE_ARGUMENTS
+    assert len(calls) == 3
+    round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
+    assert 'Proyek "OPRS WIN" belum dipastikan.' in round2_tools[0]["content"]
+    assert "find_project" in round2_tools[0]["content"]
+    round3_tools = [m for m in calls[2]["messages"] if m["role"] == "tool"]
+    assert round3_tools[-1]["content"] == (
+        'No exact match for "OPRS WIN". Closest: OPRS Divisi WIN 2026. '
+        "Ask the user which one is meant."
+    )
+
+
+def test_unknown_project_blocks_whole_batch():
+    bad = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "Proyek Fiktif")
+    calls = []
+    stub = make_stub(
+        [tool_reply_multi([SAMPLE_ARGUMENTS, bad]),
+         find_reply("find_project", "Proyek Fiktif"),
+         tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS])],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["type"] == "function_call"
+    assert len(json.loads(env["arguments"])) == 2
+    round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
+    assert round2_tools[0]["content"] == "OK"
+    assert 'Proyek "Proyek Fiktif" belum dipastikan.' in round2_tools[1]["content"]
+
+
+def test_no_close_candidate_ends_in_model_question():
+    bad = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "zzz qqq")
+    calls = []
+    stub = make_stub(
+        [tool_reply(arguments=bad),
+         find_reply("find_project", "zzz qqq"),
+         text_reply('Proyek "zzz qqq" nggak ada. Proyeknya yang mana?')],
+        calls,
+    )
+    env, _ = call_run(stub)
     assert env["type"] == "text"
-    assert env["function_name"] == ""
-    assert env["arguments"] == ""
-    assert env["reply"] == 'Maksud kamu "Imam Ihsani"?'
-    assert len(calls) == 1  # list misses are not retried
-    assert history[-1]["content"] == env["reply"]
+    assert env["reply"] == 'Proyek "zzz qqq" nggak ada. Proyeknya yang mana?'
+    round3_tools = [m for m in calls[2]["messages"] if m["role"] == "tool"]
+    assert round3_tools[-1]["content"] == (
+        '"zzz qqq" not found in the project list. Ask the user to check the spelling.'
+    )
+
+
+def test_unknown_employee_redirects_to_find_employee():
+    bad = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Imam")
+    calls = []
+    stub = make_stub(
+        [tool_reply(arguments=bad),
+         find_reply("find_employee", "Imam"),
+         tool_reply()],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["type"] == "function_call"
+    assert env["arguments"] == SAMPLE_ARGUMENTS
+    round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
+    assert 'Karyawan "Imam" belum dipastikan.' in round2_tools[0]["content"]
+    assert "find_employee" in round2_tools[0]["content"]
 
 
 def test_unknown_employee_blocks_whole_batch():
     bad = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Karyawan Fiktif")
     calls = []
-    env, _ = call_run(make_stub([tool_reply_multi([SAMPLE_ARGUMENTS, bad])], calls))
-    assert env["type"] == "text"
-    assert env["reply"] == 'Karyawan "Karyawan Fiktif" tidak ada di daftar karyawan.'
-    assert len(calls) == 1
+    stub = make_stub(
+        [tool_reply_multi([SAMPLE_ARGUMENTS, bad]),
+         find_reply("find_employee", "Karyawan Fiktif"),
+         tool_reply_multi([SAMPLE_ARGUMENTS, ROW2_ARGUMENTS])],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["type"] == "function_call"
+    assert len(json.loads(env["arguments"])) == 2
+    round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
+    assert 'Karyawan "Karyawan Fiktif" belum dipastikan.' in round2_tools[1]["content"]
 
+
+def test_unknown_employee_no_close_candidate_ends_in_model_question():
+    bad = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "zzz qqq")
+    calls = []
+    stub = make_stub(
+        [tool_reply(arguments=bad),
+         find_reply("find_employee", "zzz qqq"),
+         text_reply('Karyawan "zzz qqq" nggak ada di daftar. Siapa namanya?')],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["type"] == "text"
+    assert env["reply"] == 'Karyawan "zzz qqq" nggak ada di daftar. Siapa namanya?'
+
+
+def test_redirect_budget_exhaustion_refuses():
+    bad = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Karyawan Fiktif")
+    calls = []
+    stub = make_stub([tool_reply(arguments=bad)] * 3, calls)
+    env, _ = call_run(stub)
+    assert env["success"] is False
+    assert env["type"] == "error"
+    assert env["arguments"] == ""
+    assert "Tidak ada data yang dikirim" in env["reply"]
+    assert len(calls) == 3
+
+
+def test_max_rounds_exhaustion_refuses():
+    calls = []
+    stub = make_stub(
+        [find_reply("find_employee", "Imam Ihsani", call_id=f"call_f{i}") for i in range(6)],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["success"] is False
+    assert env["type"] == "error"
+    assert env["arguments"] == ""
+    assert "Percobaan terlalu banyak tanpa hasil" in env["reply"]
+    assert len(calls) == 6
+
+
+def test_find_and_create_in_same_turn_replies_to_all():
+    mixed = {
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "call_f1",
+                "type": "function",
+                "function": {
+                    "name": "find_project",
+                    "arguments": json.dumps({"name": "oprs divisi win 2026"}),
+                },
+            },
+            {"id": "call_1", "type": "function",
+             "function": {"name": "create_alokasi", "arguments": SAMPLE_ARGUMENTS}},
+        ],
+    }
+    calls = []
+    stub = make_stub([mixed, tool_reply()], calls)
+    env, _ = call_run(stub)
+    assert env["type"] == "function_call"
+    assert len(calls) == 2
+    round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
+    assert [m["tool_call_id"] for m in round2_tools] == ["call_f1", "call_1"]
+    assert round2_tools[0]["content"] == "Matched: OPRS Divisi WIN 2026"
+    assert round2_tools[1]["content"] == "OK"
+
+
+def test_find_employee_with_empty_list_reports_unavailable():
+    calls = []
+    stub = make_stub(
+        [find_reply("find_employee", "Anyone"), text_reply("Daftar belum siap, coba lagi.")],
+        calls,
+    )
+    env, _ = call_run(stub, employees=[])
+    assert env["type"] == "text"
+    round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
+    assert round2_tools[0]["content"] == "The employee list is unavailable, try again later."
+
+
+# --- employee list validation (server-fetched lists) ---
 
 def test_employee_match_ignores_case_and_padding():
     args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "  imam ihsani ")
@@ -463,25 +608,6 @@ def test_empty_employees_list_blocks_call():
     assert env["type"] == "error"
     assert env["arguments"] == ""
     assert env["reply"] == "Daftar karyawan tidak tersedia, coba lagi."
-
-
-def test_unknown_employee_no_close_candidate_still_asks():
-    args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "zzz qqq")
-    env, _ = call_run(make_stub([tool_reply(arguments=args)], []))
-    assert env["type"] == "text"
-    assert env["reply"] == 'Karyawan "zzz qqq" tidak ada di daftar karyawan.'
-    assert "Kandidat:" not in env["reply"]
-
-
-def test_unknown_employee_multiple_candidates_offer_a_choice():
-    args = SAMPLE_ARGUMENTS.replace("Imam Ihsani", "Imam")
-    employees = ["Imam Ihsani", "Imam Hidayat"]
-    env, _ = call_run(make_stub([tool_reply(arguments=args)], []), employees=employees)
-    assert env["type"] == "text"
-    assert env["reply"].startswith('Karyawan "Imam" tidak ada. Pilih:')
-    assert "Imam Ihsani" in env["reply"]
-    assert "Imam Hidayat" in env["reply"]
-    assert "Maksud kamu" not in env["reply"]
 
 
 # --- membership checks: fail-closed lists, tim_pekerjaan, canonical rewrite ---
@@ -512,44 +638,36 @@ def test_empty_lists_still_pass_text_reply():
     assert env["reply"] == "Untuk proyek apa alokasi ini?"
 
 
-def test_unknown_tim_member_no_close_match_offers_delete():
-    env, _ = call_run(make_stub([tool_reply(arguments=with_tim("Orang Asing"))], []))
-    assert env["type"] == "text"
-    assert env["arguments"] == ""
-    assert (
-        env["reply"]
-        == 'Anggota tim "Orang Asing" tidak ada di daftar karyawan. Hapus dari tim?'
+def test_unknown_tim_member_redirects_to_find_employee():
+    calls = []
+    stub = make_stub(
+        [tool_reply(arguments=with_tim("Orang Asing")),
+         find_reply("find_employee", "Orang Asing"),
+         tool_reply(arguments=with_tim("Budi Santoso"))],
+        calls,
     )
-
-
-def test_unknown_tim_member_close_match_offers_delete():
-    env, _ = call_run(make_stub([tool_reply(arguments=with_tim("Imam Ihsan"))], []))
-    assert env["type"] == "text"
-    assert (
-        env["reply"]
-        == 'Maksud kamu "Imam Ihsani" untuk tim, atau hapus "Imam Ihsan"?'
-    )
-
-
-def test_unknown_tim_member_multiple_candidates_offer_choice():
-    args = with_tim("Imam")
-    employees = ["Imam Ihsani", "Imam Hidayat"]
-    env, _ = call_run(
-        make_stub([tool_reply(arguments=args)], []), employees=employees
-    )
-    assert env["type"] == "text"
-    assert env["reply"].startswith('Anggota tim "Imam" tidak ada. Pilih:')
-    assert "Imam Ihsani" in env["reply"]
-    assert "Imam Hidayat" in env["reply"]
-    assert 'atau hapus "Imam"?' in env["reply"]
+    env, _ = call_run(stub)
+    assert env["type"] == "function_call"
+    assert json.loads(env["arguments"])["tim_pekerjaan"] == "Budi Santoso"
+    round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
+    assert 'Anggota tim "Orang Asing" belum dipastikan.' in round2_tools[0]["content"]
+    assert "find_employee" in round2_tools[0]["content"]
+    assert "minta user menghapusnya dari tim" in round2_tools[0]["content"]
 
 
 def test_unknown_tim_member_blocks_whole_batch():
     good = SAMPLE_ARGUMENTS
     bad = with_tim("Orang Asing")
-    env, _ = call_run(make_stub([tool_reply_multi([good, bad])], []))
-    assert env["type"] == "text"
-    assert env["arguments"] == ""
+    calls = []
+    stub = make_stub(
+        [tool_reply_multi([good, bad]),
+         find_reply("find_employee", "Orang Asing"),
+         tool_reply_multi([good, with_tim("Budi Santoso")])],
+        calls,
+    )
+    env, _ = call_run(stub)
+    assert env["type"] == "function_call"
+    assert len(json.loads(env["arguments"])) == 2
 
 
 def test_valid_tim_member_passes_through():
@@ -629,6 +747,37 @@ def test_row_guard_matching_rows_pass_without_nudge():
     assert len(calls) == 1  # exact match -> no corrective retry
 
 
+ONE_ROW_SUMMARY = (
+    "Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN"
+    " | 09:00-12:00. Benar?"
+)
+PENDING_HISTORY_ONE_ROW = [
+    {"role": "user", "content": "isi dev PPN OPRS"},
+    {"role": "assistant", "content": ONE_ROW_SUMMARY},
+]
+
+
+def test_row_guard_null_optionals_match_summary_without_keys():
+    # Null optional keys count as absent: the call equals the confirmed row,
+    # so it is accepted in one round (no nudge, no refusal).
+    args = json.loads(SAMPLE_ARGUMENTS)
+    args["review"] = None
+    args["tim_pekerjaan"] = None
+    calls = []
+    stub = make_stub(
+        [tool_reply(arguments=json.dumps(args)),
+         tool_reply(arguments=json.dumps(args))],
+        calls,
+    )
+    env, _ = call_run(stub, raw_message="ya", history=PENDING_HISTORY_ONE_ROW)
+    assert env["type"] == "function_call"
+    assert len(calls) == 1  # no nudge round
+    final = json.loads(env["arguments"])
+    assert "review" not in final
+    assert "tim_pekerjaan" not in final
+    assert final["nama_karyawan"] == "Imam Ihsani"
+
+
 def test_row_guard_mismatch_nudges_with_confirmed_rows():
     calls = []
     stub = make_stub(
@@ -705,3 +854,47 @@ def test_row_guard_fr05_shrink_recovered():
     assert env["type"] == "function_call"
     assert len(json.loads(env["arguments"])) == 2
     assert len(calls) == 3
+
+
+# --- find_* name resolution (difflib, no LLM) ---
+
+def test_resolve_name_exact_match_returns_canonical_spelling():
+    assert _resolve_name("imam ihsani", "find_employee", EMPLOYEES) == "Matched: Imam Ihsani"
+
+
+def test_resolve_name_returns_candidates_for_near_match():
+    result = _resolve_name("Imam", "find_employee", ["Imam Ihsani", "Imam Hidayat"])
+    assert result.startswith('No exact match for "Imam". Closest: ')
+    assert "Imam Ihsani" in result and "Imam Hidayat" in result
+    assert result.endswith("Ask the user which one is meant.")
+
+
+def test_resolve_name_not_found():
+    assert _resolve_name("zzz qqq", "find_project", PROJECTS) == (
+        '"zzz qqq" not found in the project list. Ask the user to check the spelling.'
+    )
+
+
+def test_resolve_name_empty_list_is_unavailable():
+    assert _resolve_name("Anyone", "find_employee", []) == (
+        "The employee list is unavailable, try again later."
+    )
+
+
+def test_resolve_name_unreadable_name_asks_to_retry():
+    assert _resolve_name("", "find_employee", EMPLOYEES) == (
+        'Could not read the name. Call again with {"name": "..."} as plain text.'
+    )
+
+
+def test_find_call_with_bad_json_reads_as_empty_name():
+    message = {
+        "tool_calls": [
+            {
+                "id": "call_x",
+                "type": "function",
+                "function": {"name": "find_employee", "arguments": "not json"},
+            }
+        ]
+    }
+    assert _find_calls(message) == [("call_x", "find_employee", "")]
