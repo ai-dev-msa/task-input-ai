@@ -18,7 +18,6 @@ REQUIRED_FIELDS = (
 )
 
 # Optional fields the model may add; absent means "user did not provide".
-# jam_selesai: omit on insert when the user gives no end time.
 OPTIONAL_FIELDS = (
     "jam_selesai",
     "review",
@@ -27,8 +26,8 @@ OPTIONAL_FIELDS = (
 
 CREATE_ALOKASI_DESCRIPTION = (
     "Buat satu baris alokasi kerja karyawan untuk satu tanggal: "
-    "nama karyawan, nama proyek, tanggal, jenis pekerjaan, dan jam mulai; "
-    "jam selesai opsional (kosongkan jika user tidak menyebutnya)."
+    "nama karyawan, nama proyek, tanggal, jenis pekerjaan, dan jam mulai;"
+    "jam selesai opsional (kosongkan jika user tidak menyebutnya)"
 )
 
 CREATE_ALOKASI_TOOL = {
@@ -62,7 +61,7 @@ CREATE_ALOKASI_TOOL = {
                 "type": "string",
             },
             "nama_proyek": {
-                "description": "Nama proyek, contoh: Penyusunan SOP Perusahaan 2026",
+                "description": "Nama proyek, contoh: OPRS Divisi WIN 2026",
                 "minLength": 1,
                 "title": "Nama Proyek",
                 "type": "string",
@@ -138,7 +137,6 @@ FIND_PROJECT_TOOL = {
         "type": "object",
     },
 }
-
 
 def _is_real_date(value: str) -> bool:
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):

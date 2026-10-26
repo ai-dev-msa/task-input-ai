@@ -1,18 +1,19 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from alokasi_agent import run
+# from alokasi_agent import run
 import json
 import os
-import time
 import requests
-from datetime import datetime
-from zoneinfo import ZoneInfo
+import time # jangan lupa tambahin karena ada time.monotonic //notes
+from datetime import datetime # jangan lupa tambahin karena ada time.monotonic //notes
+from zoneinfo import ZoneInfo # jangan lupa tambahin karena ada time.monotonic //notes
 
 import sys
 sys.path.insert(0, "/var/www/html/msaai/ai-service/app/src")
 
 from alokasi_agent import run
+
 
 
 load_dotenv("/var/www/html/msaai/.env", override=True)
@@ -22,12 +23,10 @@ app = Flask(__name__)
 
 
 from modules.proyek import proyek_bp
-from modules.proyek.routes import controller as proyek_controller #by ihsan
 app.register_blueprint(proyek_bp)
 
-from modules.karyawan import karyawan_bp
-from modules.karyawan.routes import controller as karyawan_controller
-app.register_blueprint(karyawan_bp)
+from modules.karyawan import karyawan_bp #tiap kali bikin module langsung register ke sini yak //notes
+app.register_blueprint(karyawan_bp) #//notes
 
 # Satu TTL untuk cache proyek & token ERP (detik).
 CACHE_TTL = float(os.getenv("ALOKASI_CACHE_TTL", "300"))
@@ -73,7 +72,7 @@ def get_projects():
     try:
         token = get_erp_token()
         tahun = str(datetime.now(ZoneInfo("Asia/Jakarta")).year)
-        for fetch in (proyek_controller.getProyekMSAByYear, proyek_controller.getProyekWINByYear):
+        for fetch in (controller.getProyekMSAByYear, controller.getProyekWINByYear):
             response, status = fetch(tahun, token)
             if status == 200:
                 names += _names_from(response.get_json().get("data"))
@@ -96,32 +95,6 @@ def get_projects():
     _cache_set("projects", merged)
     return merged
 
-
-def get_employees():
-    """Daftar karyawan aktif dari MIS, di-cache.
-    Kalau gagal, kembalikan [] dan biarkan /chat pakai employees dari body."""
-    cached = _cache_get("employees")
-    if cached is not None:
-        return cached
-    names = []
-    try:
-        token = get_erp_token()
-        response, status = karyawan_controller.getListKaryawanAktif(token)
-        if status == 200:
-            names = _names_from(response.get_json().get("data"))
-    except Exception as exc:
-        print("get_employees gagal:", repr(exc))
-    # Dedupe case-insensitive, urutan pertama dipertahankan.
-    seen = set()
-    merged = []
-    for name in names:
-        key = name.strip().casefold()
-        if key not in seen:
-            seen.add(key)
-            merged.append(name.strip())
-    _cache_set("employees", merged)
-    return merged
-
 #cors ini buat nembak endpoint python ke mis
 CORS(
     app,
@@ -132,6 +105,11 @@ CORS(
             ]
         },
         r"/proyek": {
+            "origins": [
+                "https://appweb.mitrasinergi.co.id"
+            ]
+        },
+        r"/karyawan": { # Ihsan nambahin //notes
             "origins": [
                 "https://appweb.mitrasinergi.co.id"
             ]
@@ -156,11 +134,6 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    user_message = ""
-    user_id = None
-    # Kalau terjadi error setelah run(), frontend tetap menerima history
-    # yang sudah diperbarui — kalau tidak, giliran konfirmasi hilang.
-    fallback_history = []
     try:
         data = request.get_json(silent=True) or {}
 
@@ -193,20 +166,18 @@ def chat():
 
         # 1) All AI logic lives in run(). It returns (envelope, history);
         #    the envelope already contains reply + history.
-        # Proyek & karyawan dari endpoint server (cached); body hanya fallback.
-        projects = get_projects() or (data.get("projects") or [])
-        employees = get_employees() or (data.get("employees") or [])
-        fallback_history = data.get("history") or []
+        # Proyek dari endpoint server (cached); body hanya fallback.
+        projects = get_projects() or (data.get("projects") or [])        
         envelope, _history = run(
             user_message,
             user_name=data.get("user_name") or "",
-            employees=employees,
-            projects=projects,
+            employees=data.get("employees") or [],
+            # projects=data.get("projects") or [],
+            projects=projects, #kalau udah buat controller project manggilnya langsung begini aja //notes
             history=data.get("history") or [],
             user_id=user_id,
         )
         body = dict(envelope)
-        fallback_history = body.get("history") or fallback_history
 
         #++VVVVVV Cari function call / ambil arguments (DIHAPUS dari sini karena
         # kode AI track): sekarang ada di src/alokasi_agent/agent.py -> run(),
@@ -239,35 +210,28 @@ def chat():
             #//++VVVVVV
 
             #++VVVVVV Kirim data ke API ERP CI3
-            # One POST per row. A failed row becomes its own result so the
-            # rows already written stay visible instead of vanishing behind
-            # a generic error.
+            # One POST per row.
             results = []
-            for index, row in enumerate(rows, start=1):
-                try:
-                    response_ci3 = requests.post(
-                        "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/createAlokasi",
-                        json=row,
-                        headers={
-                            "Authorization": f"Bearer {token}",
-                            "Content-Type": "application/json"
-                        },
-                        timeout=30
-                    )
+            for row in rows:
+                response_ci3 = requests.post(
+                    "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/createAlokasi",
+                    json=row,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json"
+                    },
+                    timeout=30
+                )
 
-                    #++VVVVVV DEBUG RESPONSE
-                    print("CI3 HTTP STATUS:", response_ci3.status_code)
-                    print("CI3 RESPONSE:", response_ci3.text)
-                    #//++VVVVVV
+                #++VVVVVV DEBUG RESPONSE
+                print("CI3 HTTP STATUS:", response_ci3.status_code)
+                print("CI3 RESPONSE:", response_ci3.text)
+                #//++VVVVVV
 
-                    hasil_ci3 = response_ci3.json()
-                except Exception as error:
-                    print(f"CI3 row {index} error:", repr(error))
-                    hasil_ci3 = {
-                        "success": False,
-                        "message": f"Baris {index} gagal dikirim ke ERP",
-                    }
+                #++VVVVVV Ambil response dari API ERP CI3
+                hasil_ci3 = response_ci3.json()
                 results.append(hasil_ci3)
+                #//++VVVVVV
 
             # One row keeps hasil_ci3 an object (the shape callers know);
             # several rows return an array of results.
@@ -294,7 +258,7 @@ def chat():
             "raw_message": user_message,
             "user_id": user_id,
             "reply": "Terjadi kesalahan, coba lagi.",
-            "history": fallback_history
+            "history": data.get("history") or []
         })
 
 
@@ -303,7 +267,7 @@ def get_erp_token():
     cached = _cache_get("erp_token")
     if cached is not None:
         return cached
-
+    
     username = os.getenv("ERP_API_USERNAME")
     password = os.getenv("ERP_API_PASSWORD")
 
@@ -353,7 +317,6 @@ def get_erp_token():
             "Access token tidak ditemukan dari response login ERP"
         )
     #//++VVVVVV
-
     _cache_set("erp_token", token)
     return token
 

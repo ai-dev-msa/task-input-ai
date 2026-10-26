@@ -173,7 +173,6 @@ Now (WIB, UTC+7): {{now_wib}}
 Logged-in user: {{current_user_name}}
 """
 
-
 def build_system_prompt(now: datetime, user_name: str) -> str:
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
@@ -191,7 +190,6 @@ def build_system_prompt(now: datetime, user_name: str) -> str:
         lambda match: values.get(match.group(1), match.group(0)),
         PROMPT_TEMPLATE,
     )
-
 
 def _clean_last_part(part: str) -> str:
     """Strip the trailing 'Benar?' / 'Salah?' / '.' the summary line ends with."""
