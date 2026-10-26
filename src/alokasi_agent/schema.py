@@ -46,7 +46,7 @@ CREATE_ALOKASI_TOOL = {
                 "description": "Jam selesai dalam format HH:MM, contoh: 12:00",
                 "pattern": "^\\d{2}:\\d{2}$",
                 "title": "Jam Selesai",
-                "type": "string",
+                "type": ["string", "null"],
             },
             "jenis_pekerjaan": {
                 "description": "Uraian pekerjaan, contoh: Development Modul PPN",
@@ -187,10 +187,11 @@ def validate_arguments(arguments: str) -> list[str]:
     # Optional fields: if sent with a value, it must carry real content.
     # Explicit null means the same as the key being absent, so it is accepted.
     for name in OPTIONAL_FIELDS:
-        if name in args and args[name] is not None:
-            value = args[name]
-            if not isinstance(value, str) or not value.strip():
-                errors.append(f"{name} kosong atau tidak diisi")
+        value = args.get(name)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue  # None or blank means "not provided"
+        if not isinstance(value, str):
+            errors.append(f"{name} harus berupa teks")
 
     tanggal = args.get("tanggal")
     if isinstance(tanggal, str) and tanggal.strip() and not _is_real_date(tanggal):

@@ -164,7 +164,10 @@ def _canonicalize_row(
     # Explicit null means "user did not provide it"; the backend contract is
     # an absent key, so drop those and emit the stripped JSON.
     for name in OPTIONAL_FIELDS:
-        if name in args and args[name] is None:
+        value = args.get(name)
+        if name in args and (
+            value is None or (isinstance(value, str) and not value.strip())
+    ):
             del args[name]
             changed = True
     for field, valid in (("nama_karyawan", employees), ("nama_proyek", projects)):
