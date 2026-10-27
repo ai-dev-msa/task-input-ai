@@ -119,14 +119,19 @@ FIND_EMPLOYEE_TOOL = {
 FIND_PROJECT_TOOL = {
     "name": "find_project",
     "description": (
-        "Cocokkan nama dengan daftar proyek. Panggil untuk setiap nama_proyek "
-        "sebelum create_alokasi; gunakan ejaan yang dikembalikan alat ini."
+        "Cocokkan nama proyek dengan daftar proyek. Panggil untuk setiap nama_proyek "
+        "sebelum create_alokasi. Kirim nama proyek selengkap yang ditulis user, "
+        "jangan dipotong atau disingkat. Gunakan ejaan yang dikembalikan alat ini. "
+        "Jika hasilnya berisi beberapa kandidat, tanyakan ke user yang mana."
     ),
     "input_schema": {
         "additionalProperties": False,
         "properties": {
             "name": {
-                "description": "Nama proyek sesuai tulisan user, contoh: OPRS Divisi WIN 2026",
+                "description": (
+                    "Nama proyek lengkap persis seperti tulisan user, "
+                    "contoh: OPRS Divisi WIN 2026. Jangan hanya awalannya (misal 'OPRS')."
+                ),
                 "minLength": 1,
                 "title": "Name",
                 "type": "string",

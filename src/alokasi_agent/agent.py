@@ -86,13 +86,19 @@ def _resolve_name(value: str, tool_name: str, valid: Sequence[str]) -> str:
     wanted = value.strip().casefold()
     if wanted in canonical:
         return f"Matched: {canonical[wanted]}"
-    candidates = difflib.get_close_matches(value, list(canonical.values()), n=3, cutoff=0.5)
-    if candidates:
+
+    # Whole-name similarity on lowercase keys, mapped back to the official spelling.
+    close = difflib.get_close_matches(wanted, list(canonical), n=3, cutoff=0.6)
+    if close:
         return (
-            f'No exact match for "{value}". Closest: {", ".join(candidates)}. '
+            f'No exact match for "{value}". '
+            f'Closest: {", ".join(canonical[key] for key in close)}. '
             "Ask the user which one is meant."
         )
-    return f'"{value}" not found in the {kind} list. Ask the user to check the spelling.'
+    return (
+        f'"{value}" not found in the {kind} list. '
+        "Ask the user to write the full name or check the spelling."
+    )
 
 
 def _redirect_problems(
