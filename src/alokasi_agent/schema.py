@@ -21,7 +21,6 @@ REQUIRED_FIELDS = (
 OPTIONAL_FIELDS = (
     "jam_selesai",
     "review",
-    "tim_pekerjaan",
 )
 
 CREATE_ALOKASI_DESCRIPTION = (
@@ -80,12 +79,6 @@ CREATE_ALOKASI_TOOL = {
                 "title": "Tanggal",
                 "type": "string",
             },
-            "tim_pekerjaan": {
-                "description": "Nama anggota tim, dipisah koma, contoh: Bimo Aditya Pangestu, Janie Natalie",
-                "minLength": 1,
-                "title": "Tim Pekerjaan",
-                "type": "string",
-            },
         },
         "required": list(REQUIRED_FIELDS),
         "title": "CreateAlokasiArgs",
@@ -95,8 +88,7 @@ CREATE_ALOKASI_TOOL = {
 
 FIND_EMPLOYEE_DESCRIPTION = (
     "Cocokkan nama dengan daftar karyawan. Panggil untuk setiap nama_karyawan "
-    "dan setiap anggota tim_pekerjaan sebelum create_alokasi; gunakan ejaan "
-    "yang dikembalikan alat ini."
+    "sebelum create_alokasi; gunakan ejaan yang dikembalikan alat ini."
 )
 
 FIND_EMPLOYEE_TOOL = {

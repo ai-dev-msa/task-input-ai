@@ -10,7 +10,7 @@ _WIB = ZoneInfo("Asia/Jakarta")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _TIME_RANGE = re.compile(r"^\d{2}:\d{2}(-\d{2}:\d{2})?$")
 # Optional trailing slots of a summary line, after the five required parts.
-_SUMMARY_OPTIONAL = ("review", "tim_pekerjaan")
+_SUMMARY_OPTIONAL = ("review")
 _WEEKDAYS_ID = ("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
 _MONTHS_ID = (
     "Januari",
@@ -46,21 +46,20 @@ something is unclear, ask one short question instead of explaining.
 # Flow
 1. Extract per row. Required: nama_karyawan (the assignee), nama_proyek,
    tanggal, jenis_pekerjaan, jam_mulai. Optional, only if the user gives them:
-   jam_selesai (end time or duration), review, tim_pekerjaan.
+   jam_selesai (end time or duration), review.
 2. If a required field is missing or ambiguous, ask ONE short question covering
    all of them and do not call the function. Ambiguous means the rules below
    cannot pick one value; if a rule resolves it (logged-in user, current year,
    relative date, a single match, working-hours reading), use it and do not ask.
 3. Resolve every name before anything else: call find_employee for the assignee
    (unless it is "saya/aku/gue" or unnamed — that is the logged-in user, use it
-   from Context with no lookup) and each tim_pekerjaan member, and find_project
-   for the project, passing the project name in full, exactly as the user wrote
+   from Context with no lookup) and find_project for the project, passing the project name in full, exactly as the user wrote
    it (never only its first word), and use only the spelling the tool returned.
    When it returns candidates, ask the user which one it is; when it finds
    nothing, ask the user for the full project name.
    Do not show a confirmation until every name is resolved.
 4. If everything is resolved, show one line per row and ask to confirm:
-   nama_karyawan | nama_proyek | tanggal | jenis_pekerjaan | jam_mulai-jam_selesai[ | review][ | tim_pekerjaan]. Benar?
+   nama_karyawan | nama_proyek | tanggal | jenis_pekerjaan | jam_mulai-jam_selesai[ | review]. Benar?
    With no end time, show only jam_mulai (no dash). Always write real values,
    never placeholders like "(hari ini)".
 5. Edit instead of confirmation ("ganti jam selesai jadi 13:00"): update that
@@ -110,11 +109,7 @@ review (optional): "[a/b/c/d] status". Copy the brackets verbatim, then "Done"
   work name beside the bracket goes to jenis_pekerjaan. Only for tasks dated
   today or up to 3 days ago; if older, say in one line that review can only be
   entered max 3 days after the task date, set it to null, and continue.
-tim_pekerjaan (optional): comma-separated team members, each resolved with
-  find_employee (same rule as nama_karyawan); when one cannot be resolved, ask
-  the user to fix the name or drop it from the team.
-The tool requires every key. Pass null for jam_selesai, review, or
-tim_pekerjaan when the user gave none. Never pass "" for them.
+The tool requires every key. Pass null for jam_selesai, review when the user gave none. Never pass "" for them.
 
 # Before calling
 Call only if: every name came back from find_employee or find_project; tanggal
@@ -133,7 +128,7 @@ real names through find_employee/find_project first.
 PPN, jam 09 pagi sampai 12 siang, proyek OPRS Divisi WIN 2026"
 -> Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN |
    09:00-12:00. Benar?
-"ya" -> `create_alokasi` (jam_selesai "12:00", review null, tim_pekerjaan null)
+"ya" -> `create_alokasi` (jam_selesai "12:00", review null)
 
 "ganti jam selesai jadi 13:00" (after the summary above)
 -> Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN |
@@ -152,7 +147,7 @@ Perusahaan 2026"
    mulainya?"
 
 "hari ini stress test aplikasi jam 9-12, proyek Pengembangan Produk Baru 2026,
-review [1/1/1/0] Done, tim Eko sama Mega"
+review [1/1/1/0] Done"
 -> Dimas Eka Priyadi | Pengembangan Produk Baru 2026 | 2026-09-30 | stress test
    aplikasi | 09:00-12:00 | [1/1/1/0] Done | Eko Prasetyo, Mega Puspita. Benar?
 
@@ -212,7 +207,7 @@ def parse_summary(reply: str | None) -> list[dict[str, str]]:
 
     Each line is split on '|':
       nama | proyek | tanggal | jenis | jam_mulai-jam_selesai
-      plus ' | review' and ' | tim_pekerjaan' when present.
+      plus ' | review' when present.
     Lines with fewer than 5 parts are not summaries (the drop_review notice,
     chatter) and are ignored; a summary-shaped line that will not parse
     makes the whole reply unparseable (a confirm turn then scores 0 fields).
@@ -222,7 +217,7 @@ def parse_summary(reply: str | None) -> list[dict[str, str]]:
         parts = [part.strip() for part in line.split("|")]
         if len(parts) < 5:
             continue
-        if len(parts) > 7:
+        if len(parts) > 6:
             return []
         parts[-1] = _clean_last_part(parts[-1])
         nama, proyek, tanggal, jenis, jam = parts[:5]

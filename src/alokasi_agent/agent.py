@@ -123,13 +123,6 @@ def _redirect_problems(
                 f'Proyek "{value}" belum dipastikan. Panggil find_project '
                 "untuk menyelesaikannya, lalu kirim ulang create_alokasi."
             )
-        tim = str(args.get("tim_pekerjaan") or "")
-        members = [part.strip() for part in tim.split(",") if part.strip()]
-        for value in _missing_names(members, employees):
-            lines.append(
-                f'Anggota tim "{value}" belum dipastikan. Panggil find_employee '
-                "untuk menyelesaikannya, atau minta user menghapusnya dari tim."
-            )
         problems[tc.get("id", "")] = " ".join(lines)
     return problems
 
@@ -181,13 +174,6 @@ def _canonicalize_row(
         canonical = _canonical_name(value, valid)
         if canonical != value:
             args[field] = canonical
-            changed = True
-    tim = args.get("tim_pekerjaan")
-    if isinstance(tim, str) and tim.strip():
-        members = [part.strip() for part in tim.split(",") if part.strip()]
-        joined = ", ".join(_canonical_name(member, employees) for member in members)
-        if joined != tim:
-            args["tim_pekerjaan"] = joined
             changed = True
     return raw if not changed else json.dumps(args, separators=(",", ":"))
 
