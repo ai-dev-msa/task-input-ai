@@ -26,8 +26,10 @@ OPTIONAL_FIELDS = (
 
 CREATE_ALOKASI_DESCRIPTION = (
     "Buat satu baris alokasi kerja karyawan untuk satu tanggal: "
-    "nama karyawan, nama proyek, tanggal, jenis pekerjaan, dan jam mulai;"
-    "jam selesai opsional (kosongkan jika user tidak menyebutnya)"
+    "nama karyawan, nama proyek, tanggal, jenis pekerjaan, dan jam mulai; "
+    "jam selesai opsional (kosongkan jika user tidak menyebutnya). "
+    "Jika ada beberapa baris, panggil fungsi ini sekali per baris, "
+    "semuanya dalam satu balasan."
 )
 
 CREATE_ALOKASI_TOOL = {

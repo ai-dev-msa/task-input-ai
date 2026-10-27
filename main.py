@@ -236,6 +236,14 @@ def chat():
             # One row keeps hasil_ci3 an object (the shape callers know);
             # several rows return an array of results.
             body["hasil_ci3"] = results[0] if single_row else results
+            # NEW: one combined message for the web app to show.
+            saved = sum(
+                r.get("jumlah", 1)
+                for r in results
+                if isinstance(r, dict) and r.get("success")
+            )
+            body["ringkasan"] = f"{saved} dari {len(rows)} alokasi berhasil dibuat"
+
             return jsonify(body)
             #//++VVVVVV
 
