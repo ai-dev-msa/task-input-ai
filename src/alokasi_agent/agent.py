@@ -88,7 +88,10 @@ def _resolve_name(value: str, tool_name: str, valid: Sequence[str]) -> str:
         return f"Matched: {canonical[wanted]}"
 
     # Whole-name similarity on lowercase keys, mapped back to the official spelling.
-    close = difflib.get_close_matches(wanted, list(canonical), n=3, cutoff=0.6)
+    # 0.5 (not 0.6): OPRS-style abbreviations ("OPRS WIN" = 0.571) must still
+    # surface candidates — the shared "OPRS Divisi ... 2026" prefix keeps
+    # shortened names in the 0.5-0.6 band.
+    close = difflib.get_close_matches(wanted, list(canonical), n=3, cutoff=0.5)
     if close:
         return (
             f'No exact match for "{value}". '

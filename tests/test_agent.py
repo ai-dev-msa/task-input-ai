@@ -898,3 +898,135 @@ def test_find_call_with_bad_json_reads_as_empty_name():
         ]
     }
     assert _find_calls(message) == [("call_x", "find_employee", "")]
+
+
+# --- realistic made-up project list (stand-in for the unfetchable MIS list) ---
+# Siblings share long prefixes (OPRS Divisi ..., "Managed Service - ...",
+# "... Tahap N"), so the tests below only pass when the COMPLETE name is
+# compared — a lookup using the first few characters could not tell them apart.
+
+REAL_PROJECTS = [
+    "OPRS Divisi FIN 2026",
+    "OPRS Divisi HRD 2026",
+    "OPRS Divisi IT 2026",
+    "OPRS Divisi WIN 2026",
+    "Managed Service - Instalasi IKR Area Depok Periode September 2026",
+    "Managed Service - Instalasi IKR Area Bekasi Periode September 2026",
+    "Relokasi FO Ruas Jalan BII Bandung Tahap 3",
+    "Relokasi FO Ruas Jalan BII Bandung Tahap 4",
+]
+
+
+def test_full_project_names_resolve_to_their_own_sibling():
+    # Each complete name matches its own spelling, never a same-prefix sibling.
+    for name in REAL_PROJECTS:
+        assert _resolve_name(name, "find_project", REAL_PROJECTS) == f"Matched: {name}"
+
+
+def test_full_project_name_match_ignores_case_and_padding():
+    assert (
+        _resolve_name("  oprs divisi win 2026 ", "find_project", REAL_PROJECTS)
+        == "Matched: OPRS Divisi WIN 2026"
+    )
+    assert (
+        _resolve_name(
+            "relokasi fo ruas jalan bii bandung tahap 4", "find_project", REAL_PROJECTS
+        )
+        == "Matched: Relokasi FO Ruas Jalan BII Bandung Tahap 4"
+    )
+
+
+def test_oprs_abbreviation_returns_sibling_candidates():
+    # Regression pin for the reported bug: "OPRS <div>" shorthand scores
+    # 0.571 against the full name — below cutoff 0.6 it used to come back
+    # "not found" with no candidates at all.
+    assert _resolve_name("OPRS WIN", "find_project", REAL_PROJECTS) == (
+        'No exact match for "OPRS WIN". '
+        "Closest: OPRS Divisi WIN 2026, OPRS Divisi FIN 2026. "
+        "Ask the user which one is meant."
+    )
+    assert _resolve_name("OPRS HRD", "find_project", REAL_PROJECTS) == (
+        'No exact match for "OPRS HRD". '
+        "Closest: OPRS Divisi HRD 2026. "
+        "Ask the user which one is meant."
+    )
+
+
+def test_near_full_variants_return_the_right_candidates():
+    # One word missing from an otherwise complete name must still surface
+    # the official spelling for the model to offer.
+    result = _resolve_name("OPRS WIN 2026", "find_project", REAL_PROJECTS)
+    assert result.startswith('No exact match for "OPRS WIN 2026". Closest: ')
+    assert "OPRS Divisi WIN 2026" in result
+
+    result = _resolve_name(
+        "Managed Service - Instalasi IKR Area Depok", "find_project", REAL_PROJECTS
+    )
+    assert "Managed Service - Instalasi IKR Area Depok Periode September 2026" in result
+
+    result = _resolve_name(
+        "Relokasi FO Jalan BII Bandung Tahap 3", "find_project", REAL_PROJECTS
+    )
+    assert "Relokasi FO Ruas Jalan BII Bandung Tahap 3" in result
+
+
+def test_prefix_only_input_never_validates_as_a_name():
+    # First few words can never come back "Matched" — candidates or
+    # not-found only, so a prefix never passes as a project name.
+    for prefix in ("OPRS", "OPRS Div", "Managed Service -", "Relokasi FO Ruas"):
+        result = _resolve_name(prefix, "find_project", REAL_PROJECTS)
+        assert not result.startswith("Matched:"), result
+
+
+def test_full_project_name_accepted_in_one_round():
+    # create_alokasi carrying a complete in-list name needs no redirect.
+    calls = []
+    env, _ = call_run(make_stub([tool_reply()], calls), projects=REAL_PROJECTS)
+    assert env["type"] == "function_call"
+    assert json.loads(env["arguments"])["nama_proyek"] == "OPRS Divisi WIN 2026"
+    assert len(calls) == 1
+
+
+def test_oprs_abbreviation_flow_shows_candidates_then_corrects():
+    # End-to-end: model first sends "OPRS HRD" -> redirected to find_project
+    # -> tool answers with the sibling candidates -> model corrects to the
+    # full list spelling and the row is accepted.
+    bad = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "OPRS HRD")
+    fixed = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "OPRS Divisi HRD 2026")
+    calls = []
+    stub = make_stub(
+        [
+            tool_reply(arguments=bad),
+            find_reply("find_project", "OPRS HRD"),
+            tool_reply(arguments=fixed),
+        ],
+        calls,
+    )
+    env, _ = call_run(stub, projects=REAL_PROJECTS)
+    assert env["type"] == "function_call"
+    assert json.loads(env["arguments"])["nama_proyek"] == "OPRS Divisi HRD 2026"
+    round3_tools = [m for m in calls[2]["messages"] if m["role"] == "tool"]
+    assert round3_tools[-1]["content"] == (
+        'No exact match for "OPRS HRD". Closest: OPRS Divisi HRD 2026. '
+        "Ask the user which one is meant."
+    )
+
+
+def test_prefix_in_create_alokasi_is_redirected_to_find_project():
+    # The membership gate is whole-string: a prefix of a valid name is not
+    # a member, so the row never reaches the ERP unchecked.
+    bad = SAMPLE_ARGUMENTS.replace("OPRS Divisi WIN 2026", "OPRS Div")
+    calls = []
+    stub = make_stub(
+        [
+            tool_reply(arguments=bad),
+            find_reply("find_project", "OPRS Div"),
+            tool_reply(),
+        ],
+        calls,
+    )
+    env, _ = call_run(stub, projects=REAL_PROJECTS)
+    assert env["type"] == "function_call"
+    round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
+    assert 'Proyek "OPRS Div" belum dipastikan.' in round2_tools[0]["content"]
+    assert "find_project" in round2_tools[0]["content"]
