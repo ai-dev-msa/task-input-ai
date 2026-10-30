@@ -147,7 +147,7 @@ def test_first_tool_call_wins():
 ROW2_ARGUMENTS = (
     '{"nama_karyawan":"Budi Santoso","nama_proyek":"OPRS Divisi WIN 2026",'
     '"tanggal":"2026-09-30","jenis_pekerjaan":"Testing sistem",'
-    '"jam_mulai":"16:30","jam_selesai":"17:00","review":"[1/1/0/2] Done"}'
+    '"jam_mulai":"16:30","jam_selesai":"17:00","keterangan":"[1/1/0/2] Done"}'
 )
 
 
@@ -189,7 +189,7 @@ def test_multiple_rows_produce_array_arguments():
     assert len(rows) == 2
     assert rows[0]["nama_karyawan"] == "Imam Ihsani"
     assert rows[1]["nama_karyawan"] == "Budi Santoso"
-    assert rows[1]["review"] == "[1/1/0/2] Done"
+    assert rows[1]["keterangan"] == "[1/1/0/2] Done"
     assert len(calls) == 1
 
 
@@ -372,8 +372,7 @@ def test_partial_message_then_answer_produces_complete_call():
 
 def test_null_optional_fields_are_accepted_and_stripped():
     args = json.loads(SAMPLE_ARGUMENTS)
-    args["review"] = None
-    args["tim_pekerjaan"] = None
+    args["keterangan"] = None
     calls = []
     stub = make_stub(
         [tool_reply(arguments=json.dumps(args)),
@@ -383,8 +382,7 @@ def test_null_optional_fields_are_accepted_and_stripped():
     env, _ = call_run(stub)
     assert env["type"] == "function_call"
     final = json.loads(env["arguments"])
-    assert "review" not in final
-    assert "tim_pekerjaan" not in final
+    assert "keterangan" not in final
     assert final["nama_karyawan"] == "Imam Ihsani"
     # One round only: an explicit null is absent, not an FR-05 error.
     assert len(calls) == 1
@@ -476,7 +474,8 @@ def test_no_close_candidate_ends_in_model_question():
     assert env["reply"] == 'Proyek "zzz qqq" nggak ada. Proyeknya yang mana?'
     round3_tools = [m for m in calls[2]["messages"] if m["role"] == "tool"]
     assert round3_tools[-1]["content"] == (
-        '"zzz qqq" not found in the project list. Ask the user to check the spelling.'
+        '"zzz qqq" not found in the project list. '
+        "Ask the user to write the full name or check the spelling."
     )
 
 
@@ -610,12 +609,7 @@ def test_empty_employees_list_blocks_call():
     assert env["reply"] == "Daftar karyawan tidak tersedia, coba lagi."
 
 
-# --- membership checks: fail-closed lists, tim_pekerjaan, canonical rewrite ---
-
-def with_tim(tim_value):
-    row = json.loads(SAMPLE_ARGUMENTS)
-    row["tim_pekerjaan"] = tim_value
-    return json.dumps(row, separators=(",", ":"))
+# --- membership checks: fail-closed lists, canonical rewrite ---
 
 
 def test_both_empty_lists_block_call():
@@ -638,55 +632,15 @@ def test_empty_lists_still_pass_text_reply():
     assert env["reply"] == "Untuk proyek apa alokasi ini?"
 
 
-def test_unknown_tim_member_redirects_to_find_employee():
-    calls = []
-    stub = make_stub(
-        [tool_reply(arguments=with_tim("Orang Asing")),
-         find_reply("find_employee", "Orang Asing"),
-         tool_reply(arguments=with_tim("Budi Santoso"))],
-        calls,
-    )
-    env, _ = call_run(stub)
-    assert env["type"] == "function_call"
-    assert json.loads(env["arguments"])["tim_pekerjaan"] == "Budi Santoso"
-    round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
-    assert 'Anggota tim "Orang Asing" belum dipastikan.' in round2_tools[0]["content"]
-    assert "find_employee" in round2_tools[0]["content"]
-    assert "minta user menghapusnya dari tim" in round2_tools[0]["content"]
-
-
-def test_unknown_tim_member_blocks_whole_batch():
-    good = SAMPLE_ARGUMENTS
-    bad = with_tim("Orang Asing")
-    calls = []
-    stub = make_stub(
-        [tool_reply_multi([good, bad]),
-         find_reply("find_employee", "Orang Asing"),
-         tool_reply_multi([good, with_tim("Budi Santoso")])],
-        calls,
-    )
-    env, _ = call_run(stub)
-    assert env["type"] == "function_call"
-    assert len(json.loads(env["arguments"])) == 2
-
-
-def test_valid_tim_member_passes_through():
-    env, _ = call_run(make_stub([tool_reply(arguments=with_tim("Budi Santoso"))], []))
-    assert env["type"] == "function_call"
-    assert json.loads(env["arguments"])["tim_pekerjaan"] == "Budi Santoso"
-
-
 def test_case_mismatch_rewritten_to_canonical():
     row = json.loads(SAMPLE_ARGUMENTS)
     row["nama_karyawan"] = "  imam ihsani "
     row["nama_proyek"] = "oprs divisi win 2026"
-    row["tim_pekerjaan"] = "budi santoso, IMAM IHSANI"
     env, _ = call_run(make_stub([tool_reply(arguments=json.dumps(row))], []))
     assert env["type"] == "function_call"
     args = json.loads(env["arguments"])
     assert args["nama_karyawan"] == "Imam Ihsani"
     assert args["nama_proyek"] == "OPRS Divisi WIN 2026"
-    assert args["tim_pekerjaan"] == "Budi Santoso, Imam Ihsani"
 
 
 # --- FR-08 row guard: what is inserted must equal what was confirmed ---
@@ -706,7 +660,7 @@ PENDING_HISTORY = [
 DRIFTED_ROW2_ARGUMENTS = (
     '{"nama_karyawan":"Budi Santoso","nama_proyek":"OPRS Divisi WIN 2026",'
     '"tanggal":"2026-09-30","jenis_pekerjaan":"Testing sistem",'
-    '"jam_mulai":"16:00","jam_selesai":"17:00","review":"[1/1/0/2] Done"}'
+    '"jam_mulai":"16:00","jam_selesai":"17:00","keterangan":"[1/1/0/2] Done"}'
 )
 
 
@@ -730,7 +684,7 @@ def test_confirmed_rows_parses_last_assistant_summary():
             "jenis_pekerjaan": "Testing sistem",
             "jam_mulai": "16:30",
             "jam_selesai": "17:00",
-            "review": "[1/1/0/2] Done",
+            "keterangan": "[1/1/0/2] Done",
         },
     ]
     assert _confirmed_rows([]) == []
@@ -761,8 +715,7 @@ def test_row_guard_null_optionals_match_summary_without_keys():
     # Null optional keys count as absent: the call equals the confirmed row,
     # so it is accepted in one round (no nudge, no refusal).
     args = json.loads(SAMPLE_ARGUMENTS)
-    args["review"] = None
-    args["tim_pekerjaan"] = None
+    args["keterangan"] = None
     calls = []
     stub = make_stub(
         [tool_reply(arguments=json.dumps(args)),
@@ -773,8 +726,7 @@ def test_row_guard_null_optionals_match_summary_without_keys():
     assert env["type"] == "function_call"
     assert len(calls) == 1  # no nudge round
     final = json.loads(env["arguments"])
-    assert "review" not in final
-    assert "tim_pekerjaan" not in final
+    assert "keterangan" not in final
     assert final["nama_karyawan"] == "Imam Ihsani"
 
 
@@ -871,7 +823,8 @@ def test_resolve_name_returns_candidates_for_near_match():
 
 def test_resolve_name_not_found():
     assert _resolve_name("zzz qqq", "find_project", PROJECTS) == (
-        '"zzz qqq" not found in the project list. Ask the user to check the spelling.'
+        '"zzz qqq" not found in the project list. '
+        "Ask the user to write the full name or check the spelling."
     )
 
 

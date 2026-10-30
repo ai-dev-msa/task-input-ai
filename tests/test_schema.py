@@ -70,25 +70,22 @@ def test_validate_accepts_missing_jam_selesai():
 
 
 def test_validate_accepts_optional_fields():
-    assert (
-        validate_arguments(
-            as_json(review="[1/1/1/0] Done", tim_pekerjaan="Imam Ihsani, Budi Santoso")
-        )
-        == []
-    )
+    assert validate_arguments(as_json(keterangan="[1/1/1/0]")) == []
 
 
 @pytest.mark.parametrize(
     "payload",
     [
-        as_json(review=""),
-        as_json(tim_pekerjaan="   "),
+        as_json(keterangan=""),
+        as_json(keterangan="   "),
         as_json(jam_selesai=""),
         as_json(jam_selesai="   "),
     ],
 )
-def test_validate_rejects_blank_optional_field(payload):
-    assert validate_arguments(payload) != []
+def test_blank_optional_fields_mean_not_provided(payload):
+    # 451502c: a blank optional means "the user did not provide it", so the
+    # validator accepts it and the agent strips the key before the backend.
+    assert validate_arguments(payload) == []
 
 
 @pytest.mark.parametrize(
@@ -123,22 +120,9 @@ def test_explicit_null_on_optional_fields_is_accepted():
         "jenis_pekerjaan": "Development Modul PPN",
         "jam_mulai": "09:00",
         "jam_selesai": "12:00",
-        "review": None,
-        "tim_pekerjaan": None,
+        "keterangan": None,
     })
     assert validate_arguments(args) == []
-
-
-def test_empty_string_on_optional_field_still_errors():
-    args = json.dumps({
-        "nama_karyawan": "Imam Ihsani",
-        "nama_proyek": "OPRS Divisi WIN 2026",
-        "tanggal": "2026-09-29",
-        "jenis_pekerjaan": "Development Modul PPN",
-        "jam_mulai": "09:00",
-        "review": "",
-    })
-    assert "review kosong atau tidak diisi" in validate_arguments(args)
 
 
 def test_validate_reports_every_missing_field():

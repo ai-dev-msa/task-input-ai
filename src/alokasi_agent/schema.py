@@ -20,7 +20,7 @@ REQUIRED_FIELDS = (
 # Optional fields the model may add; absent means "user did not provide".
 OPTIONAL_FIELDS = (
     "jam_selesai",
-    "review",
+    "keterangan",
 )
 
 CREATE_ALOKASI_DESCRIPTION = (
@@ -55,6 +55,12 @@ CREATE_ALOKASI_TOOL = {
                 "title": "Jenis Pekerjaan",
                 "type": "string",
             },
+            "keterangan": {
+                "description": "Status/hasil pekerjaan dalam format [a/b/c/d], contoh: [2/1/1/0]",
+                "minLength": 1,
+                "title": "Keterangan",
+                "type": "string",
+            },
             "nama_karyawan": {
                 "description": "Nama lengkap karyawan, contoh: Imam Ihsani",
                 "minLength": 1,
@@ -65,12 +71,6 @@ CREATE_ALOKASI_TOOL = {
                 "description": "Nama proyek, contoh: OPRS Divisi WIN 2026",
                 "minLength": 1,
                 "title": "Nama Proyek",
-                "type": "string",
-            },
-            "review": {
-                "description": "Status/hasil pekerjaan, contoh: [1/1/1/0] Done",
-                "minLength": 1,
-                "title": "Review",
                 "type": "string",
             },
             "tanggal": {

@@ -55,7 +55,6 @@ def envelope_with(arguments, history=None):
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr(main, "get_projects", lambda: [])
-    monkeypatch.setattr(main, "get_employees", lambda: [])
     monkeypatch.setattr(main, "get_erp_token", lambda: "token-test")
     monkeypatch.setattr(
         main.requests, "get",

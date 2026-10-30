@@ -97,11 +97,11 @@ def test_name_resolution_markers_present():
     out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
     assert "Resolve the name with find_employee" in out
     assert "same rule with find_project" in out
-    assert "each resolved with" in out
+    assert "use only the spelling the tool returned" in out
     assert "every name came back from find_employee or find_project" in out
     assert "always resolve" in out
     assert "result in this conversation" in out
-    assert "Never invent or abbreviate" in out
+    assert "never shorten it to a prefix" in out
 
 
 def test_date_time_rule_markers_present():
@@ -114,13 +114,22 @@ def test_date_time_rule_markers_present():
 
 def test_optional_field_rules_present():
     out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
-    assert "review (optional):" in out
-    assert "tim_pekerjaan (optional):" in out
-    assert '"[a/b/c/d] status"' in out
+    assert "keterangan (optional):" in out
+    assert '"[a/b/c/d]"' in out
+    assert "a work log the user writes" in out
+    assert "The numbers do NOT decide where the" in out
+    assert "never recalculate or correct" in out
+    assert 'never add "Done" or "not done"' in out
+    assert "with a label word (review, hasil, keterangan) -> keterangan:" in out
+    assert 'exactly as typed: "Verifikasi laporan kas [1/1/0/1]" -> jenis_pekerjaan' in out
+    assert '"review laporan kas [2/1/1/0]"' in out
+    assert 'atau keterangan?" and put it where the user says.' in out
     assert "max 3 days after the task date" in out
     assert "Always include every key in the call." in out
     assert 'Never pass "" for them.' in out
     assert "do not ask or guess a length" in out
+    assert "review (optional):" not in out
+    assert "tim_pekerjaan" not in out
 
 
 def test_missing_optional_end_time_never_prompts_ask():
@@ -130,7 +139,7 @@ def test_missing_optional_end_time_never_prompts_ask():
     # "jam selesai?" into that question).
     out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
     # Flow rule #2: the ask decision explicitly excludes optional fields.
-    assert "never add jam_selesai or review to" in out
+    assert "never add jam_selesai or keterangan to" in out
     assert "an omitted optional field" in out
     # Field rule: a missing end time is not a reason to ask at all.
     assert "never ask the user to supply it" in out

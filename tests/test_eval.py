@@ -80,27 +80,27 @@ def test_parse_summary_single_time_omits_jam_selesai():
     ]
 
 
-def test_parse_summary_keeps_review_and_tim():
+def test_parse_summary_keeps_keterangan():
     line = (
         "Ratna Kusumawati | Pengembangan Produk Baru 2026 | 2026-09-29 "
         "| ngerjain stress test aplikasi | 09:00-12:00 "
-        "| [1/1/1/1] Done | Eko Prasetyo, Mega Puspita. Benar?"
+        "| [1/1/1/1]. Benar?"
     )
     rows = parse_summary(line)
     assert len(rows) == 1
-    assert rows[0]["review"] == "[1/1/1/1] Done"
-    assert rows[0]["tim_pekerjaan"] == "Eko Prasetyo, Mega Puspita"
+    assert rows[0]["keterangan"] == "[1/1/1/1]"
+    assert "tim_pekerjaan" not in rows[0]
 
 
 def test_parse_summary_ignores_drop_review_notice():
     reply = (
-        "Review hanya bisa diisi maksimal 3 hari setelah tanggal tugas.\n"
+        "Keterangan hanya bisa diisi maksimal 3 hari setelah tanggal tugas.\n"
         "Eka Mulyani | Penjualan Korporat Wilayah Jabar 2026 | 2026-09-26 "
         "| bikin laporan kunjungan klien | 10:00-12:00. Benar?"
     )
     rows = parse_summary(reply)
     assert len(rows) == 1
-    assert "review" not in rows[0]
+    assert "keterangan" not in rows[0]
     assert rows[0]["jam_mulai"] == "10:00"
 
 
@@ -145,7 +145,7 @@ def test_parse_summary_no_summary():
     assert parse_summary("Untuk proyek apa alokasi ini?") == []
     assert parse_summary("") == []
     assert parse_summary(None) == []
-    assert parse_summary("Review bisa diisi maks 3 hari.\nBenar?") == []
+    assert parse_summary("Keterangan bisa diisi maks 3 hari.\nBenar?") == []
 
 
 # --- classify ---
@@ -191,10 +191,10 @@ def test_score_confirm_with_matching_summary():
 
 
 def test_score_drop_review_counts_as_confirm():
-    gold = {key: value for key, value in ROW.items() if key != "review"}
+    gold = {key: value for key, value in ROW.items() if key != "keterangan"}
     expect = {"kind": "drop_review", "rows": [gold]}
     reply = (
-        "Review hanya bisa diisi maksimal 3 hari setelah tanggal tugas.\n"
+        "Keterangan hanya bisa diisi maksimal 3 hari setelah tanggal tugas.\n"
         "Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN "
         "| 09:00-12:00. Benar?"
     )
@@ -217,8 +217,8 @@ def test_score_call_multi_row_array_arguments():
     assert score["field_correct"] == score["field_total"] == 12
 
 
-def test_score_phantom_empty_review_fails_exact_and_field():
-    phantom = dict(ROW, review="")
+def test_score_phantom_empty_keterangan_fails_exact_and_field():
+    phantom = dict(ROW, keterangan="")
     score = score_turn({"kind": "call", "calls": [ROW]}, call_envelope([phantom]))
     assert score["decision_correct"] is True  # class is right, row is not
     assert score["row_exact"] is False
@@ -259,19 +259,19 @@ def test_score_confirm_vs_ask_is_wrong_and_scores_zero_fields():
 
 
 def test_score_optional_field_recall():
-    gold = dict(ROW, review="[1/1/1/1] Done", tim_pekerjaan="Eko Prasetyo, Mega Puspita")
+    gold = dict(ROW, keterangan="[1/1/1/1]")
     expect = {"kind": "confirm", "rows": [gold]}
     missing = score_turn(expect, text_envelope(SUMMARY_LINE))
-    assert missing["optional_total"] == 2
+    assert missing["optional_total"] == 1
     assert missing["optional_correct"] == 0
     assert missing["row_exact"] is False
 
     line = (
         "Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN "
-        "| 09:00-12:00 | [1/1/1/1] Done | Eko Prasetyo, Mega Puspita. Benar?"
+        "| 09:00-12:00 | [1/1/1/1]. Benar?"
     )
     present = score_turn(expect, text_envelope(line))
-    assert present["optional_correct"] == present["optional_total"] == 2
+    assert present["optional_correct"] == present["optional_total"] == 1
     assert present["row_exact"] is True
 
 
@@ -359,10 +359,10 @@ def test_aggregate_empty_is_none_not_crash():
 # --- dataset integrity ---
 
 
-def test_dataset_has_47_cases_with_unique_ids():
+def test_dataset_has_49_cases_with_unique_ids():
     cases = load_cases(CASES_PATH)
-    assert len(cases) == 47
-    assert len({case["id"] for case in cases}) == 47
+    assert len(cases) == 49
+    assert len({case["id"] for case in cases}) == 49
 
 
 def test_dataset_kind_and_split_counts():
@@ -371,14 +371,14 @@ def test_dataset_kind_and_split_counts():
         turn["expect"]["kind"] for case in cases for turn in case["turns"]
     )
     assert dict(kinds) == {
-        "confirm": 36,
-        "call": 34,
-        "ask": 12,
+        "confirm": 37,
+        "call": 35,
+        "ask": 13,
         "drop_review": 1,
         "cancel": 1,
         "refuse": 1,
     }
-    assert dict(Counter(case["split"] for case in cases)) == {"dev": 35, "test": 12}
+    assert dict(Counter(case["split"] for case in cases)) == {"dev": 36, "test": 13}
 
 
 def test_every_case_fixture_resolves():

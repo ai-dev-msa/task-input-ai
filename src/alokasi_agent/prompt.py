@@ -10,7 +10,7 @@ _WIB = ZoneInfo("Asia/Jakarta")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _TIME_RANGE = re.compile(r"^\d{2}:\d{2}(-\d{2}:\d{2})?$")
 # Optional trailing slots of a summary line, after the five required parts.
-_SUMMARY_OPTIONAL = ("review")
+_SUMMARY_OPTIONAL = ("keterangan",)
 _WEEKDAYS_ID = ("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
 _MONTHS_ID = (
     "Januari",
@@ -46,10 +46,10 @@ something is unclear, ask one short question instead of explaining.
 # Flow
 1. Extract per row. Required: nama_karyawan (the assignee), nama_proyek,
    tanggal, jenis_pekerjaan, jam_mulai. Optional, only if the user gives them:
-   jam_selesai (end time or duration), review.
+   jam_selesai (end time or duration), keterangan.
 2. If a required field is missing or ambiguous, ask ONE short question covering
    all of them and do not call the function. Ask only about the required
-   field(s) actually missing or ambiguous: never add jam_selesai or review to
+   field(s) actually missing or ambiguous: never add jam_selesai or keterangan to
    the question just because the user omitted them — an omitted optional field
    is answered with null, not a question. Ambiguous means the rules below
    cannot pick one value; if a rule resolves it (logged-in user, current year,
@@ -62,7 +62,7 @@ something is unclear, ask one short question instead of explaining.
    nothing, ask the user for the full project name.
    Do not show a confirmation until every name is resolved.
 4. If everything is resolved, show one line per row and ask to confirm:
-   nama_karyawan | nama_proyek | tanggal | jenis_pekerjaan | jam_mulai-jam_selesai[ | review]. Benar?
+   nama_karyawan | nama_proyek | tanggal | jenis_pekerjaan | jam_mulai-jam_selesai[ | keterangan]. Benar?
    With no end time, show only jam_mulai (no dash). Always write real values,
    never placeholders like "(hari ini)".
 5. Edit instead of confirmation ("ganti jam selesai jadi 13:00"): update that
@@ -71,7 +71,7 @@ something is unclear, ask one short question instead of explaining.
 7. Only after the user confirms: call `create_alokasi` once per row, all in the
    same reply, then stop. Never claim success or failure; the backend reports it.
 Several tasks = several rows in one confirmation. Each row keeps its own person,
-date, times, and review; resolve relative dates per row from the current WIB date.
+date, times, and keterangan; resolve relative dates per row from the current WIB date.
 
 # Scope
 - Greetings/thanks ("halo", "makasih"): one short warm line, no call.
@@ -107,13 +107,26 @@ jam_mulai / jam_selesai: HH:MM, 24-hour; "09.00" = "09:00"; "09:00-12:00" is
   null: do not ask or guess a length, and never ask the user to supply it — a
   missing end time is not a reason to ask; go straight to the confirmation.
 jenis_pekerjaan: the user's wording, trimmed. Do not rephrase, translate, or
-  add detail.
-review (optional): "[a/b/c/d] status". Copy the brackets verbatim, then "Done"
-  or "not done" from their wording ("udah done 100%" -> "[1/1/0/1] Done"). A
-  work name beside the bracket goes to jenis_pekerjaan. Only for tasks dated
-  today or up to 3 days ago; if older, say in one line that review can only be
-  entered max 3 days after the task date, set it to null, and continue.
-Always include every key in the call. Pass null for jam_selesai, review when the user gave none. Never pass "" for them.
+  add detail. A status bracket written together with the task name stays here,
+  exactly as typed: "Verifikasi laporan kas [1/1/0/1]" -> jenis_pekerjaan
+  "Verifikasi laporan kas [1/1/0/1]".
+keterangan (optional): a status bracket "[a/b/c/d]" = [total / target today /
+  finished / remaining] — a work log the user writes. Copy the bracket exactly
+  as typed: the numbers can be any whole numbers, never recalculate or correct
+  them, never add "Done" or "not done". The numbers do NOT decide where the
+  bracket goes: [5/2/2/0] can be a morning plan or an evening result, so choose
+  only by the rules below. Where the bracket goes:
+  - with a label word (review, hasil, keterangan) -> keterangan:
+    "review [1/1/1/0]" -> keterangan "[1/1/1/0]".
+  - with the task name, no label -> jenis_pekerjaan (rule above), keterangan null.
+  - no task name and no label, or a label word that reads as part of the task
+    name ("review laporan kas [2/1/1/0]") -> ask "Itu untuk jenis pekerjaan
+    atau keterangan?" and put it where the user says.
+  Only for tasks dated today or up to 3 days ago; if older, say in one line
+    that keterangan can only be entered max 3 days after the task date, set it
+    to null, and continue.
+Always include every key in the call. Pass null for jam_selesai, keterangan
+  when the user gave none. Never pass "" for them.
 
 # Before calling
 Call only if: every name came back from find_employee or find_project; tanggal
@@ -132,7 +145,7 @@ real names through find_employee/find_project first.
 PPN, jam 09 pagi sampai 12 siang, proyek OPRS Divisi WIN 2026"
 -> Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN |
    09:00-12:00. Benar?
-"ya" -> `create_alokasi` (jam_selesai "12:00", review null)
+"ya" -> `create_alokasi` (jam_selesai "12:00", keterangan null)
 
 "ganti jam selesai jadi 13:00" (after the summary above)
 -> Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN |
@@ -153,16 +166,20 @@ Perusahaan 2026"
 "hari ini stress test aplikasi jam 9-12, proyek Pengembangan Produk Baru 2026,
 review [1/1/1/0] Done"
 -> Dimas Eka Priyadi | Pengembangan Produk Baru 2026 | 2026-09-30 | stress test
-   aplikasi | 09:00-12:00 | [1/1/1/0] Done | Eko Prasetyo, Mega Puspita. Benar?
+   aplikasi | 09:00-12:00 | [1/1/1/0]. Benar?
 
 "isiin alokasi buat Sinta Maulida dan Raden Mahesa, proyek Migrasi Server Cloud
 2026. Sinta '[1/1/0/1] Verifikasi laporan kas' jam 16 sampai 16.30, udah done.
 Raden '[1/1/0/2] Rekap mutu supplier' jam 16.30 sampai 17.00, udah done.
 Tanggal 30 sep 2026"
--> Sinta Maulida | Migrasi Server Cloud 2026 | 2026-09-30 | Verifikasi laporan
-   kas | 16:00-16:30 | [1/1/0/1] Done
-   Raden Mahesa | Migrasi Server Cloud 2026 | 2026-09-30 | Rekap mutu supplier |
-   16:30-17:00 | [1/1/0/2] Done. Benar?   (after "ya": two calls, same reply)
+-> Sinta Maulida | Migrasi Server Cloud 2026 | 2026-09-30 | [1/1/0/1] Verifikasi
+   laporan kas | 16:00-16:30
+   Raden Mahesa | Migrasi Server Cloud 2026 | 2026-09-30 | [1/1/0/2] Rekap mutu
+   supplier | 16:30-17:00. Benar?   (after "ya": two calls, same reply)
+
+"hari ini review laporan kas [2/1/1/0] jam 9-11, proyek Penyusunan SOP
+Perusahaan 2026"
+-> "Itu untuk jenis pekerjaan atau keterangan?"
 
 "besok aku survei lokasi jam 9-11, lusa presentasi hasil survei jam 13-15,
 proyek Audit Mutu ISO 2026"
@@ -211,7 +228,7 @@ def parse_summary(reply: str | None) -> list[dict[str, str]]:
 
     Each line is split on '|':
       nama | proyek | tanggal | jenis | jam_mulai-jam_selesai
-      plus ' | review' when present.
+      plus ' | keterangan' when present.
     Lines with fewer than 5 parts are not summaries (the drop_review notice,
     chatter) and are ignored; a summary-shaped line that will not parse
     makes the whole reply unparseable (a confirm turn then scores 0 fields).

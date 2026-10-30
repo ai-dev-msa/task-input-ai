@@ -198,7 +198,7 @@ def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
 def _same_rows(calls: list[dict[str, Any]], confirmed: list[dict[str, str]]) -> bool:
     """True when the model's calls are exactly the confirmed rows (any order).
 
-    Null values count as absent: a call sending "review": null matches a
+    Null values count as absent: a call sending "keterangan": null matches a
     confirmation row without the key.
     FR-05 already rejected null on required fields, so dropping None for
     any key here only ever hits optionals.

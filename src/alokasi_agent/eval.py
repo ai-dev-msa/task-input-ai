@@ -27,8 +27,8 @@ EXPECTED_KIND = {
 }
 ROW_KINDS = ("confirm", "drop_review", "call")
 # Optional fields tracked by score_turn's optional-field recall (parse_summary
-# lives in prompt.py and parses the same two slots).
-OPTIONAL_FIELDS = ("review", "tim_pekerjaan")
+# lives in prompt.py and parses the same slot).
+OPTIONAL_FIELDS = ("keterangan",)
 
 
 def load_cases(path: str | Path) -> list[dict[str, Any]]:
