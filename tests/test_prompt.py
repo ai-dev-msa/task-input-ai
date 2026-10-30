@@ -118,9 +118,23 @@ def test_optional_field_rules_present():
     assert "tim_pekerjaan (optional):" in out
     assert '"[a/b/c/d] status"' in out
     assert "max 3 days after the task date" in out
-    assert "The tool requires every key." in out
+    assert "Always include every key in the call." in out
     assert 'Never pass "" for them.' in out
     assert "do not ask or guess a length" in out
+
+
+def test_missing_optional_end_time_never_prompts_ask():
+    # FR-01 (2026-10-12): a user who omits jam_selesai must be taken straight
+    # to confirmation, never asked to supply it — including when the model is
+    # already asking about a different missing field (it used to bundle
+    # "jam selesai?" into that question).
+    out = build(datetime(2026, 9, 30, 7, 5, tzinfo=timezone.utc))
+    # Flow rule #2: the ask decision explicitly excludes optional fields.
+    assert "never add jam_selesai or review to" in out
+    assert "an omitted optional field" in out
+    # Field rule: a missing end time is not a reason to ask at all.
+    assert "never ask the user to supply it" in out
+    assert "missing end time is not a reason to ask" in out
 
 
 def test_examples_keep_summary_format():
