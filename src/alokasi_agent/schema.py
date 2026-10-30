@@ -56,7 +56,7 @@ CREATE_ALOKASI_TOOL = {
                 "type": "string",
             },
             "keterangan": {
-                "description": "Status/hasil pekerjaan dalam format [a/b/c/d], contoh: [2/1/1/0]",
+                "description": "Status/hasil pekerjaan. Boleh teks biasa atau format [a/b/c/d], contoh: [2/1/1/0]",
                 "minLength": 1,
                 "title": "Keterangan",
                 "type": "string",

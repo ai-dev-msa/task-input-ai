@@ -110,7 +110,9 @@ jenis_pekerjaan: the user's wording, trimmed. Do not rephrase, translate, or
   add detail. A status bracket written together with the task name stays here,
   exactly as typed: "Verifikasi laporan kas [1/1/0/1]" -> jenis_pekerjaan
   "Verifikasi laporan kas [1/1/0/1]".
-keterangan (optional): a status bracket "[a/b/c/d]" = [total / target today /
+keterangan (optional): the status/result of the work. Either a status bracket
+  "[a/b/c/d]" or plain text, always written with a label word (review, hasil,
+  keterangan). Copy it exactly as typed, without the label word. a status bracket "[a/b/c/d]" = [total / target today /
   finished / remaining] — a work log the user writes. Copy the bracket exactly
   as typed: the numbers can be any whole numbers, never recalculate or correct
   them, never add "Done" or "not done". The numbers do NOT decide where the
@@ -122,6 +124,9 @@ keterangan (optional): a status bracket "[a/b/c/d]" = [total / target today /
   - no task name and no label, or a label word that reads as part of the task
     name ("review laporan kas [2/1/1/0]") -> ask "Itu untuk jenis pekerjaan
     atau keterangan?" and put it where the user says.
+  - plain text with a label word -> keterangan, as typed:
+    "keterangan: sudah selesai" -> keterangan "sudah selesai".
+    Plain text with no label word stays part of jenis_pekerjaan.
   Only for tasks dated today or up to 3 days ago; if older, say in one line
     that keterangan can only be entered max 3 days after the task date, set it
     to null, and continue.
