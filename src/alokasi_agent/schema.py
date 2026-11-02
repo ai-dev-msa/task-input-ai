@@ -24,9 +24,10 @@ OPTIONAL_FIELDS = (
 )
 
 CREATE_ALOKASI_DESCRIPTION = (
-    "Buat satu baris alokasi kerja karyawan untuk satu tanggal: "
-    "nama karyawan, nama proyek, tanggal, jenis pekerjaan, dan jam mulai; "
-    "jam selesai opsional (kosongkan jika user tidak menyebutnya). "
+    "Buat satu baris alokasi kerja karyawan untuk satu tanggal. "
+    "Wajib: nama_karyawan, nama_proyek, tanggal, jenis_pekerjaan, jam_mulai. "
+    "Opsional: jam_selesai dan keterangan. Jika user tidak menulisnya, "
+    "isi null dan lanjutkan; jangan ditanyakan. "
     "Jika ada beberapa baris, panggil fungsi ini sekali per baris, "
     "semuanya dalam satu balasan."
 )
@@ -44,7 +45,10 @@ CREATE_ALOKASI_TOOL = {
                 "type": "string",
             },
             "jam_selesai": {
-                "description": "Jam selesai dalam format HH:MM, contoh: 12:00",
+                "description": (
+                    "Jam selesai HH:MM, contoh: 12:00. Opsional: "
+                    "null jika user tidak menyebutnya"
+                ),
                 "pattern": "^\\d{2}:\\d{2}$",
                 "title": "Jam Selesai",
                 "type": ["string", "null"],
