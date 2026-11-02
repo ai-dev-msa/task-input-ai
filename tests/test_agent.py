@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 
 from alokasi_agent import run
-from alokasi_agent.agent import _find_calls, _resolve_name
+from alokasi_agent.agent import _asks_about_jam_selesai, _find_calls, _resolve_name
 from alokasi_agent.llm import to_openai_tools
 from alokasi_agent.schema import CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL
 
@@ -82,6 +82,41 @@ def test_text_reply_builds_envelope():
     assert env["reply"] == "Untuk proyek apa alokasi ini?"
     assert env["raw_message"] == EXAMPLE_MESSAGE
     assert [turn["role"] for turn in history] == ["user", "assistant"]
+
+
+# --- jam selesai ask guard (optional end time must never be asked) ---
+
+GUARD_ASK = "Jam selesai berapa dan tanggalnya kapan?"
+GUARD_OK = "Tanggal alokasinya kapan?"
+
+
+def test_asks_about_jam_selesai_detects_questions_only():
+    assert _asks_about_jam_selesai(GUARD_ASK) is True
+    assert _asks_about_jam_selesai("Jam_selesai nya berapa?") is True
+    assert _asks_about_jam_selesai(GUARD_OK) is False
+    assert _asks_about_jam_selesai("Budi | OPRS | 2026-11-02 | task | 09:00. Benar?") is False
+    assert _asks_about_jam_selesai(None) is False
+
+
+def test_guard_nudges_then_returns_corrected_reply():
+    calls = []
+    stub = make_stub([text_reply(GUARD_ASK), text_reply(GUARD_OK)], calls)
+    env, history = call_run(stub)
+    assert env["reply"] == GUARD_OK
+    assert len(calls) == 2
+    assert calls[1]["messages"][-1]["role"] == "user"
+    assert "Jam_selesai opsional" in calls[1]["messages"][-1]["content"]
+    # the nudge round never leaks into the history the frontend sees
+    assert [t["role"] for t in history] == ["user", "assistant"]
+    assert history[1]["content"] == GUARD_OK
+
+
+def test_guard_returns_second_ask_without_looping():
+    calls = []
+    stub = make_stub([text_reply(GUARD_ASK), text_reply(GUARD_ASK)], calls)
+    env, _ = call_run(stub)
+    assert env["reply"] == GUARD_ASK
+    assert len(calls) == 2
 
 
 def test_history_threading_across_confirmation():

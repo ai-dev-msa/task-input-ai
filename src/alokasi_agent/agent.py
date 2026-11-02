@@ -19,6 +19,19 @@ from alokasi_agent.schema import (
 
 MAX_ROUNDS = 6
 
+# One-shot reminder appended when a plain-text reply asks about the optional end time.
+_ASK_NUDGE = (
+    "Jam_selesai opsional. Jangan ditanyakan bila user tidak menulis waktu "
+    "berakhirnya; tanyakan hanya field wajib yang kosong. Tanyakan jam selesai "
+    "hanya bila user sudah menulis waktunya tapi ambigu atau tidak valid. Jawab ulang."
+)
+
+
+def _asks_about_jam_selesai(reply: str | None) -> bool:
+    """True when a reply is a question that mentions the optional end time."""
+    text = (reply or "").lower().replace("_", " ")
+    return "?" in text and "jam selesai" in text
+
 
 def _alokasi_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
     """Every create_alokasi tool call in the model's reply (FR-08: one per row).
@@ -251,6 +264,7 @@ def run(
     validation_retries = 0
     redirects = 0
     nudged = False
+    ask_nudged = False
     refuse_reason = ""
     message: dict[str, Any] = {}
     calls: list[dict[str, Any]] = []
@@ -322,6 +336,15 @@ def run(
             continue
 
         if not calls:
+            if not ask_nudged and _asks_about_jam_selesai(message.get("content")):
+                # One conditional reminder: the model re-reads its own question
+                # and keeps it only if the user really wrote an end time.
+                ask_nudged = True
+                messages = messages + [
+                    {"role": "assistant", "content": message.get("content")},
+                    {"role": "user", "content": _ASK_NUDGE},
+                ]
+                continue
             break  # plain text reply (or only unknown tool names) -> text envelope
 
         if missing := _missing_lists_message(employees, projects):

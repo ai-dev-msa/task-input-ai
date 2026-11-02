@@ -164,6 +164,10 @@ Perusahaan 2026"
 -> Dimas Eka Priyadi | Penyusunan SOP Perusahaan 2026 | 2026-10-01 | nulis
    draft SOP pengadaan | 13:00. Benar?   (no end time: jam_selesai null, not asked)
 
+"isikan alokasi untuk saya, revisi modul PPN, proyek OPRS Divisi WIN 2026 dari jam 9"
+-> "Tanggal alokasinya kapan?"   (start given, no date: the question covers only the
+   missing required field; the omitted end time is never added to it)
+
 "Tambahin Rizka besok pagi meeting client"
 -> "Rizka yang mana: Rizka Amelia atau Rizka Putri? Dan proyek serta jam
    mulainya?"

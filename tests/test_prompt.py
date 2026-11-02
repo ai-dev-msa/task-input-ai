@@ -144,6 +144,8 @@ def test_missing_optional_end_time_never_prompts_ask():
     # Field rule: a missing end time is not a reason to ask at all.
     assert "never ask the user to supply it" in out
     assert "missing end time is not a reason to ask" in out
+    # Example: date missing but the start given — the ask covers tanggal only.
+    assert "Tanggal alokasinya kapan?" in out
 
 
 def test_examples_keep_summary_format():
