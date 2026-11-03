@@ -21,9 +21,9 @@ MAX_ROUNDS = 6
 
 # One-shot reminder appended when a plain-text reply asks about the optional end time.
 _ASK_NUDGE = (
-    "Jam_selesai opsional. Jangan ditanyakan bila user tidak menulis waktu "
-    "berakhirnya; tanyakan hanya field wajib yang kosong. Tanyakan jam selesai "
-    "hanya bila user sudah menulis waktunya tapi ambigu atau tidak valid. Jawab ulang."
+    "Hanya 5 field wajib yang boleh ditanyakan. Isi jam_selesai dengan null "
+    "dan lanjut ke konfirmasi, kecuali user sudah menulis waktu berakhir "
+    "yang ambigu atau tidak valid. Jawab ulang."
 )
 
 
@@ -86,35 +86,29 @@ def _missing_names(values: Sequence[str], valid: Sequence[str]) -> list[str]:
 
 
 def _resolve_name(value: str, tool_name: str, valid: Sequence[str]) -> str:
-    """Tool result for one find_* call: match text only, never a user question.
+    """Tool result for one find_* call: facts only, no instructions.
 
-    The model decides what to ask the user after reading this (FR-09).
+    What to do with each result (ask which one, ask to recheck) is decided
+    by the system prompt, not by this text (FR-09).
     """
     kind = "project" if tool_name == "find_project" else "employee"
     if not valid:
-        return f"The {kind} list is unavailable, try again later."
+        return f"RESULT: {kind} list unavailable."
     if not value:
-        return 'Could not read the name. Call again with {"name": "..."} as plain text.'
+        return 'RESULT: name unreadable. Call again with {"name": "..."}.'
     canonical = _canonical_map(valid)
     wanted = value.strip().casefold()
     if wanted in canonical:
-        return f"Matched: {canonical[wanted]}"
+        return f"RESULT: exact match: {canonical[wanted]}"
 
-    # Whole-name similarity on lowercase keys, mapped back to the official spelling.
-    # 0.5 (not 0.6): OPRS-style abbreviations ("OPRS WIN" = 0.571) must still
-    # surface candidates — the shared "OPRS Divisi ... 2026" prefix keeps
-    # shortened names in the 0.5-0.6 band.
+    # 0.5 (not 0.6): OPRS-style abbreviations must still surface candidates.
     close = difflib.get_close_matches(wanted, list(canonical), n=3, cutoff=0.5)
     if close:
         return (
-            f'No exact match for "{value}". '
-            f'Closest: {", ".join(canonical[key] for key in close)}. '
-            "Ask the user which one is meant."
+            f'RESULT: no exact match for "{value}". '
+            f'Candidates: {"; ".join(canonical[key] for key in close)}'
         )
-    return (
-        f'"{value}" not found in the {kind} list. '
-        "Ask the user to write the full name or check the spelling."
-    )
+    return f'RESULT: no match for "{value}".'
 
 
 def _redirect_problems(
