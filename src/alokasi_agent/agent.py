@@ -211,14 +211,20 @@ def _same_rows(calls: list[dict[str, Any]], confirmed: list[dict[str, str]]) -> 
     any key here only ever hits optionals.
     """
 
-    def canonical(rows):
-        cleaned = [
-            {k: v for k, v in row.items() if v is not None}
-            for row in rows
-        ]
-        return sorted(
-            json.dumps(row, sort_keys=True, ensure_ascii=False) for row in cleaned
-        )
+def canonical(rows):
+    # parse_summary strips a trailing "." from the last column, so
+    # compare without it on both sides.
+    cleaned = [
+        {
+            k: v.strip().rstrip(".").strip() if isinstance(v, str) else v
+            for k, v in row.items()
+            if v is not None
+        }
+        for row in rows
+    ]
+    return sorted(
+        json.dumps(row, sort_keys=True, ensure_ascii=False) for row in cleaned
+    )
 
     emitted = [json.loads(tc["function"].get("arguments", "")) for tc in calls]
     return canonical(emitted) == canonical(confirmed)

@@ -60,10 +60,14 @@ CREATE_ALOKASI_TOOL = {
                 "type": "string",
             },
             "keterangan": {
-                "description": "Status/hasil pekerjaan. Boleh teks biasa atau format [a/b/c/d], contoh: [2/1/1/0]",
+                "description": (
+                    "Status/hasil pekerjaan, tanpa kata label (review/hasil/keterangan). "
+                    "Boleh bracket [a/b/c/d] (contoh: [2/1/1/0]) atau teks biasa "
+                    "(contoh: sudah selesai)"
+                ),
                 "minLength": 1,
                 "title": "Keterangan",
-                "type": "string",
+                "type": ["string", "null"],
             },
             "nama_karyawan": {
                 "description": "Nama lengkap karyawan, contoh: Imam Ihsani",
