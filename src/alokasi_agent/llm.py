@@ -47,15 +47,22 @@ def complete(
     return client.chat.completions.create(**kwargs).model_dump()
 
 
-def to_openai_tools(*tools: dict[str, Any]) -> list[dict[str, Any]]:
+def to_openai_tools(
+    tool: dict[str, Any] | Sequence[dict[str, Any]] #yang baru ada tambahan sequence
+) -> list[dict[str, Any]]:
+    if isinstance(tool, dict):
+        tool_list = [tool]
+    else:
+        tool_list = tool
+
     return [
         {
             "type": "function",
             "function": {
-                "name": tool["name"],
-                "description": tool["description"],
-                "parameters": tool["input_schema"],
+                "name": item["name"],
+                "description": item["description"],
+                "parameters": item["input_schema"],
             },
         }
-        for tool in tools
+        for item in tool_list
     ]

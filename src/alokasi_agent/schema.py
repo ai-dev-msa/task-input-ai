@@ -21,6 +21,9 @@ REQUIRED_FIELDS = (
 OPTIONAL_FIELDS = (
     "jam_selesai",
     "keterangan",
+    "jobdesc",
+    "planning",
+    "kategori_pekerjaan",
 )
 
 CREATE_ALOKASI_DESCRIPTION = (
@@ -87,6 +90,54 @@ CREATE_ALOKASI_TOOL = {
                 "title": "Tanggal",
                 "type": "string",
             },
+            "jobdesc": { #tambahan dari ihsan 2 11 2026
+                "description": (
+                    "Nama jobdesc sesuai pilihan pengguna. "
+                    "Kirim sebagai teks, bukan ID. Jangan mengarang nama."
+                ),
+                "title": "Jobdesc",
+                "type": "string",
+                "minLength": 1,
+            },
+            "planning": { #tambahan dari ihsan 2 11 2026
+                "description": (
+                    "Nama aktivitas planning sesuai pilihan pengguna. "
+                    "Kirim sebagai teks, bukan ID. Jangan mengarang nama."
+                ),
+                "title": "Planning",
+                "type": "string",
+                "minLength": 1,
+            },
+            "kategori_pekerjaan": {
+                "title": "Kategori",
+                "type": "string",
+                "minLength": 1,
+                "description": (
+                    "Nama kategori pekerjaan sesuai BoQ proyek. "
+                    "Wajib untuk karyawan MSA divisi 1. "
+                    "Untuk pekerjaan Standby, isi dengan Standby."
+                ),
+            },
+            "plan_qty": {
+                "title": "Qty Plan",
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Jumlah rencana pekerjaan dalam angka. "
+                    "Wajib untuk karyawan MSA divisi 1, kecuali Standby "
+                    "yang otomatis menggunakan nilai 1."
+                ),
+            },
+            # "boq_id": {
+            #     "type": ["integer", "null"],
+            #     "description": "ID BOQ. Tidak wajib untuk kategori Standby."
+            # },
+            # "tim_pekerjaan": {
+            #     "description": "Nama anggota tim, dipisah koma, contoh: Bimo Aditya Pangestu, Janie Natalie",
+            #     "minLength": 1,
+            #     "title": "Tim Pekerjaan",
+            #     "type": "string",
+            # },
         },
         "required": list(REQUIRED_FIELDS),
         "title": "CreateAlokasiArgs",
@@ -142,6 +193,54 @@ FIND_PROJECT_TOOL = {
         "required": ["name"],
         "title": "FindProjectArgs",
         "type": "object",
+    },
+}
+
+CHECK_PROJECT_TOOL = { #dari ihsan
+    "name": "check_project",
+    "description": (
+        "Memeriksa apakah suatu proyek terdaftar di MSA. "
+        "Gunakan untuk pertanyaan tentang keberadaan, ketersediaan, "
+        "atau status terdaftarnya proyek. Tidak membuat alokasi."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "nama_proyek": {
+                "type": "string",
+                "description": (
+                    "Nama proyek yang ingin diperiksa berdasarkan "
+                    "permintaan pengguna."
+                ),
+                "minLength": 1,
+            }
+        },
+        "required": ["nama_proyek"],
+    },
+}
+
+CHECK_EMPLOYEE_TOOL = { #dari ihsan
+    "name": "check_employee",
+    "description": (
+        "Memeriksa apakah karyawan terdaftar sebagai karyawan aktif di MSA. "
+        "Gunakan hanya ketika pengguna bertanya tentang keberadaan karyawan. "
+        "Jangan gunakan check_project untuk pertanyaan karyawan. "
+        "Tidak membuat alokasi."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "nama_karyawan": {
+                "type": "string",
+                "description": (
+                    "Nama atau kata kunci nama karyawan yang ingin dicari."
+                ),
+                "minLength": 1,
+            }
+        },
+        "required": ["nama_karyawan"],
     },
 }
 

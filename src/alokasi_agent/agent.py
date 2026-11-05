@@ -10,12 +10,14 @@ from alokasi_agent.llm import complete as default_complete
 from alokasi_agent.llm import to_openai_tools
 from alokasi_agent.prompt import build_system_prompt, parse_summary
 from alokasi_agent.schema import (
-    CREATE_ALOKASI_TOOL,
-    FIND_EMPLOYEE_TOOL,
-    FIND_PROJECT_TOOL,
-    OPTIONAL_FIELDS,
-    validate_arguments,
-)
+  CREATE_ALOKASI_TOOL, 
+  FIND_EMPLOYEE_TOOL,
+  FIND_PROJECT_TOOL,
+  OPTIONAL_FIELDS,
+  validate_arguments, 
+  CHECK_PROJECT_TOOL, 
+  CHECK_EMPLOYEE_TOOL
+  )
 
 MAX_ROUNDS = 6
 
@@ -46,6 +48,49 @@ def _alokasi_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         if (tc.get("function") or {}).get("name") == "create_alokasi"
     ]
 
+def _project_check_calls( #cek keberadaan proyek
+    message: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Ambil tool call khusus pengecekan keberadaan proyek."""
+    calls = message.get("tool_calls") or []
+    return [
+        tc
+        for tc in calls
+        if (tc.get("function") or {}).get("name") == "check_project"
+    ]
+
+def _employee_check_calls( #cek keberadaan karyawan
+    message: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Ambil tool call khusus pengecekan keberadaan karyawan."""
+    calls = message.get("tool_calls") or []
+    return [
+        tc
+        for tc in calls
+        if (tc.get("function") or {}).get("name") == "check_employee"
+    ]
+
+def _project_check_calls( #cek keberadaan proyek
+    message: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Ambil tool call khusus pengecekan keberadaan proyek."""
+    calls = message.get("tool_calls") or []
+    return [
+        tc
+        for tc in calls
+        if (tc.get("function") or {}).get("name") == "check_project"
+    ]
+
+def _employee_check_calls( #cek keberadaan karyawan
+    message: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Ambil tool call khusus pengecekan keberadaan karyawan."""
+    calls = message.get("tool_calls") or []
+    return [
+        tc
+        for tc in calls
+        if (tc.get("function") or {}).get("name") == "check_employee"
+    ]
 
 def _find_calls(message: dict[str, Any]) -> list[tuple[str, str, str]]:
     """(tool_call id, function name, name) for every find_* call in the reply."""
@@ -69,6 +114,72 @@ def _validate_calls(calls: list[dict[str, Any]]) -> dict[str, list[str]]:
         tc.get("id", ""): validate_arguments(tc["function"].get("arguments", ""))
         for tc in calls
     }
+
+def _project_problem(
+    calls: list[dict[str, Any]], projects: Sequence[str]
+) -> str | None:
+    """Hard list check: every row's nama_proyek must exist in `projects`.
+
+    Trim + case-insensitive match. Returns the user-facing question when some
+    row's project is unknown, else None. Empty list means "no list to check
+    against", so the check is skipped.
+    """
+    if not projects:
+        return None
+    canonical: dict[str, str] = {}
+    for name in projects:
+        canonical.setdefault(name.strip().casefold(), name)
+    lines: list[str] = []
+    for tc in calls:
+        args = json.loads(tc["function"].get("arguments", ""))
+        value = str(args.get("nama_proyek", "")).strip()
+        if value.casefold() in canonical:
+            continue
+        candidates = difflib.get_close_matches(
+            value, list(canonical.values()), n=3, cutoff=0.5
+        )
+        if len(candidates) == 1:
+            lines.append(f'Maksud kamu "{candidates[0]}"?')
+        elif candidates:
+            lines.append(
+                f'Proyek "{value}" tidak ada. Pilih: {", ".join(candidates)}'
+            )
+        else:
+            lines.append(f'Proyek "{value}" tidak ada di daftar proyek.')
+    return " ".join(lines) or None
+
+def _employee_problem(
+    calls: list[dict[str, Any]], employees: Sequence[str]
+) -> str | None:
+    """Hard list check: every row's nama_karyawan must exist in `employees`.
+
+    Trim + case-insensitive match. Returns the user-facing question when some
+    row's employee is unknown, else None. Empty list means "no list to check
+    against", so the check is skipped.
+    """
+    if not employees:
+        return None
+    canonical: dict[str, str] = {}
+    for name in employees:
+        canonical.setdefault(name.strip().casefold(), name)
+    lines: list[str] = []
+    for tc in calls:
+        args = json.loads(tc["function"].get("arguments", ""))
+        value = str(args.get("nama_karyawan", "")).strip()
+        if value.casefold() in canonical:
+            continue
+        candidates = difflib.get_close_matches(
+            value, list(canonical.values()), n=3, cutoff=0.5
+        )
+        if len(candidates) == 1:
+            lines.append(f'Maksud kamu "{candidates[0]}"?')
+        elif candidates:
+            lines.append(
+                f'Karyawan "{value}" tidak ada. Pilih: {", ".join(candidates)}'
+            )
+        else:
+            lines.append(f'Karyawan "{value}" tidak ada di daftar karyawan.')
+    return " ".join(lines) or None
 
 
 def _canonical_map(valid: Sequence[str]) -> dict[str, str]:
@@ -238,6 +349,7 @@ def run(
     projects: Sequence[str],
     history: list[dict[str, Any]] | None = None,
     user_id: str | None = None,
+    id_divisi: str | None = None,
     now: datetime | None = None,
     complete: Any = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -251,14 +363,23 @@ def run(
     find_* for unresolved names. MAX_ROUNDS total, refusal when exhausted.
     """
     complete = complete or default_complete
-    system = build_system_prompt(now or datetime.now(timezone.utc), user_name)
+    system = build_system_prompt(
+        now or datetime.now(timezone.utc), user_name, employees, projects, id_divisi=id_divisi
+    )
     prior = list(history or [])
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system},
         *prior,
         {"role": "user", "content": raw_message},
     ]
-    tools = to_openai_tools(CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL)
+
+    tools = to_openai_tools([
+        CREATE_ALOKASI_TOOL,
+        CHECK_PROJECT_TOOL,
+        CHECK_EMPLOYEE_TOOL,
+        FIND_EMPLOYEE_TOOL,
+        FIND_PROJECT_TOOL
+    ])
     confirmed = _confirmed_rows(prior)
 
     validation_retries = 0
@@ -272,6 +393,67 @@ def run(
     for _ in range(MAX_ROUNDS):
         response = complete(messages, tools=tools)
         message = response["choices"][0]["message"]
+
+        #++VVVVVV CEK INTENT PENGECEKAN PROYEK
+        project_checks = _project_check_calls(message)
+
+        if project_checks:
+            # Untuk pertanyaan keberadaan proyek, jangan lanjut ke
+            # validasi create_alokasi atau retry alokasi.
+            tc = project_checks[0]
+            arguments = tc["function"].get("arguments", "{}")
+
+            envelope = {
+                "success": True,
+                "type": "function_call",
+                "function_name": "check_project",
+                "arguments": arguments,
+                "raw_message": raw_message,
+                "user_id": user_id,
+                "reply": "",
+            }
+
+            history_content = message.get("content") or ""
+
+            new_history = [
+                *prior,
+                {"role": "user", "content": raw_message},
+                {"role": "assistant", "content": history_content},
+            ]
+
+            envelope["history"] = new_history
+            return envelope, new_history
+        #++VVVVVV AKHIR CEK INTENT PENGECEKAN PROYEK
+
+        #++++++ CEK INTENT PENGECEKAN KARYAWAN
+        employee_checks = _employee_check_calls(message)
+
+        if employee_checks:
+            # Pertanyaan karyawan tidak boleh masuk ke alur create_alokasi.
+            tc = employee_checks[0]
+            arguments = tc["function"].get("arguments", "{}")
+
+            envelope = {
+                "success": True,
+                "type": "function_call",
+                "function_name": "check_employee",
+                "arguments": arguments,
+                "raw_message": raw_message,
+                "user_id": user_id,
+                "reply": "",
+            }
+
+            history_content = message.get("content") or ""
+
+            new_history = [
+                *prior,
+                {"role": "user", "content": raw_message},
+                {"role": "assistant", "content": history_content},
+            ]
+
+            envelope["history"] = new_history
+            return envelope, new_history
+        #++++++ AKHIR CEK INTENT PENGECEKAN KARYAWAN
 
         finds = _find_calls(message)
         if finds:
@@ -465,6 +647,13 @@ def run(
         }
         history_content = refuse_reason
     else:
+
+        reply = message.get("content") or ""
+
+        if not reply.strip():
+            reply = "Maaf, AI lokal/OpenAI sedang ada galat."
+
+
         envelope = {
             "success": True,
             "type": "text",
@@ -472,9 +661,10 @@ def run(
             "arguments": "",
             "raw_message": raw_message,
             "user_id": user_id,
-            "reply": message.get("content"),
+            "reply": reply,
         }
-        history_content = message.get("content") or ""
+        # history_content = message.get("content") or ""
+        history_content = reply
 
     new_history = [
         *prior,
