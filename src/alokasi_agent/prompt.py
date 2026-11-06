@@ -11,8 +11,14 @@ _WIB = ZoneInfo("Asia/Jakarta")
 # Summary-line shapes for parse_summary (rule 4 in the template below).
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _TIME_RANGE = re.compile(r"^\d{2}:\d{2}(-\d{2}:\d{2})?$")
-# Optional trailing slots of a summary line, after the five required parts.
-_SUMMARY_OPTIONAL = ("keterangan",)
+# Labeled optional slots of a summary line, after the five required parts:
+# the prefix written in the line maps to the row key.
+_SUMMARY_LABELED = (
+    ("Jobdesc:", "jobdesc"),
+    ("Planning:", "planning"),
+    ("Kategori:", "kategori_pekerjaan"),
+    ("Qty Plan:", "plan_qty"),
+)
 _WEEKDAYS_ID = ("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
 _MONTHS_ID = (
     "Januari",
@@ -265,25 +271,64 @@ jenis_pekerjaan
 for example: [1/1/0/1], [2/1/0/3], or [10/2/1/0].
 - If a BoQ code appears before a task name,
 retain the code as part of the `jenis_pekerjaan` (task type).
+- A status bracket written together with the task name, with no label word
+  (either order), stays here too, exactly as typed: "Verifikasi laporan kas [1/1/0/1]" -> jenis_pekerjaan
+  "Verifikasi laporan kas [1/1/0/1]". (If a label word is present, the
+  keterangan placement rules below decide — they may ask instead.)
 - You may include the BoQ code in the `keterangan` (description/remarks) field, provided that field is being used.
 - For employees of WIN and MSA (excluding Division 1),
 the BoQ code must be included within the `jenis_pekerjaan` (task type).
 
-keterangan (optional)
+keterangan (optional): the status/result of the work, written only when the
+user gives it — never ask for a value the user did not write. Where a bracket
+or status text goes is decided in this order:
+ 1. Explicit placement wins, when it is readable:
+    - with a label word (review, hasil, keterangan) -> keterangan:
+      the label sits right before the bracket (or opens the text, as in
+      "keterangan: ..."). "review [1/1/1/0]" -> keterangan "[1/1/1/0]".
+      A status word written next to it is appended from the user's wording:
+      "review [1/0/1/1] belum done" -> keterangan "[1/0/1/1] not done".
+    - plain text with a label word -> keterangan, as typed:
+      "keterangan: sudah selesai" -> keterangan "sudah selesai".
+    - with the task name right next to the bracket and no label word
+      (review, hasil, keterangan) anywhere in the message -> jenis_pekerjaan
+      (rule 4); keterangan only from a separate status statement (rule 3),
+      or null when the user states no status.
+    - the user saying which field -> obey what the user wrote.
+ 2. Unreadable placement -> ask. The bracket's field is unreadable when:
+    - it floats on its own: no task name written right next to it and no
+      label word (review, hasil, keterangan) anywhere in the message; or
+    - a label word is written but reads as part of the task name instead of
+      labeling the bracket ("review laporan kas [2/1/1/0]").
+    In both shapes, ask "Itu untuk jenis pekerjaan atau keterangan?" and put it where the user says.
+    This ask beats rules 3 and 4: a bare floating bracket is unreadable
+    even when status words are nearby.
+ 3. Otherwise — and only when rule 2's unreadable shapes do not apply (a
+    floating or confounded bracket asks first, even with status words
+    nearby) — wording that states done/not-done ("udah kelar", "belum done")
+    puts `keterangan` in play; a plain work description stays in jenis_pekerjaan.
+ 4. Default: jenis_pekerjaan.
 - Format: "[a/b/c/d] status". Copy the bracket numbers verbatim from the
-  user, then a short status word from their wording: "Done" or "not done"
-  (e.g. "udah done 100%" -> "[1/1/1/0] Done").
-- If the user writes the work name beside the bracket, e.g.
-  "[1/1/0/1] Tes prompting AI", the work name goes to jenis_pekerjaan;
-  keterangan keeps only the bracket and status.
-- Only for a task dated today or up to 4 days ago, measured against the
-  current WIB date. If tanggal is older than that, say in one short line
-  that keterangan can only be entered max 4 days after the task date, then drop
-  the keterangan and continue without it. Do not ask the user about it.
+  user; only when the user wrote a status, append a short status word from their wording: "Done"
+  or "not done" (e.g. the user writes "[1/1/1/0] udah done 100%" ->
+  keterangan "[1/1/1/0] Done"; no status written -> keterangan is the
+  bracket alone).
+  It is either plain text or a status bracket "[a/b/c/d]" =
+  [total / target today / finished / remaining], a work log the user writes.
+  Copy the bracket exactly as typed: the numbers can be any whole numbers,
+  never recalculate or correct them. The numbers do NOT decide where the
+  bracket goes: [5/2/2/0] can be a morning plan or an evening result, so
+  choose only by the rules above. Plain text with no label word stays part of
+  jenis_pekerjaan.
+  - Only for a task dated today or up to 4 days ago, measured against the
+    current WIB date. If tanggal is older than that, say in one short line
+    that keterangan can only be entered max 4 days after the task date, then drop
+    the keterangan and continue without it. Do not ask the user about it.
 - Omit the field when the user gives no keterangan.
 - `keterangan` (description) contains information regarding the results or details of the work.
 - Do not create your own descriptions.
-- Do not include BoQ codes in the description.
+- BoQ codes may also appear in `keterangan` when that field is used; they must
+  still be retained in `jenis_pekerjaan` as written above.
 Always include every key in the call. Pass null for jam_selesai, keterangan
   when the user gave none. Never pass "" for them.
 
@@ -367,21 +412,30 @@ proyek riset pasar segmen muda 2026"
    (Lowercase project fixed to the one match returned by find_project. No question asked.)
 
 "hari ini stress test aplikasi jam 9-12, proyek Pengembangan Produk Baru 2026,
-review [1/1/1/0] Done, tim Eko sama Mega"
+review [1/1/1/0] Done"
 -> Dimas Eka Priyadi | Pengembangan Produk Baru 2026 | 2026-09-30 | stress
-   test aplikasi | 09:00-12:00 | [1/1/1/0] Done | Eko Prasetyo, Mega
-   Puspita. Benar?
+   test aplikasi | 09:00-12:00 | [1/1/1/0] Done. Benar?
 
 "isiin alokasi buat Sinta Maulida dan Raden Mahesa dengan proyek
-Migrasi Server Cloud 2026. Sinta Maulida kerjannya '[1/1/0/1] Verifikasi
+Migrasi Server Cloud 2026. Sinta Maulida kerjannya '[1/1/1/0] Verifikasi
 laporan kas' dari jam 16 sampai 16.30, udah done 100%. Raden Mahesa
-kerjannya '[1/1/0/2] Rekap mutu supplier' dari jam 16.30 sampai 17.00,
+kerjannya '[2/2/2/0] Rekap mutu supplier' dari jam 16.30 sampai 17.00,
 udah done 100%. Tanggalnya 30 sep 2026"
--> Sinta Maulida | Migrasi Server Cloud 2026 | 2026-09-30 | Verifikasi
-   laporan kas | 16:00-16:30 | [1/1/1/0] Done
-   Raden Mahesa | Migrasi Server Cloud 2026 | 2026-09-30 | Rekap mutu
-   supplier | 16:30-17:00 | [1/1/0/2] Done. Benar?
+-> Sinta Maulida | Migrasi Server Cloud 2026 | 2026-09-30 | [1/1/1/0] Verifikasi
+   laporan kas | 16:00-16:30 | Done
+   Raden Mahesa | Migrasi Server Cloud 2026 | 2026-09-30 | [2/2/2/0] Rekap mutu
+   supplier | 16:30-17:00 | Done. Benar?
    (After "ya": two `create_alokasi` calls in the same reply.)
+
+"hari ini review laporan kas [2/1/1/0] jam 9-11, proyek Penyusunan SOP
+Perusahaan 2026"
+-> "Itu untuk jenis pekerjaan atau keterangan?"
+
+"hari ini rapat evaluasi proyek jam 13 sampe 15, [4/3/1/1] udah kelar semua,
+proyek Pengembangan Produk Baru 2026"
+-> "Itu untuk jenis pekerjaan atau keterangan?"
+   (bare bracket: no label word and no task name next to it, even though
+   status words are nearby)
 
 "isiin buat Tasya besok ngecek sertifikat produk jam 9-10, proyek
 Kampanye Peluncuran Produk Q4 2026. terus buat Bima besok bikin kuis
@@ -450,7 +504,7 @@ def _clean_last_part(part: str) -> str:
     return part.rstrip(".").strip()
 
 
-def parse_summary(reply: str | None) -> list[dict[str, str]]:
+def parse_summary(reply: str | None) -> list[dict[str, str | int]]:
     """Rows parsed from the confirmation summary in a reply.
 
     Lives here because rule 4 above defines the summary format; eval scores
@@ -458,17 +512,19 @@ def parse_summary(reply: str | None) -> list[dict[str, str]]:
 
     Each line is split on '|':
       nama | proyek | tanggal | jenis | jam_mulai-jam_selesai
-      plus ' | keterangan' when present.
+      plus ' | keterangan' when present, then the optional labeled slots
+      ('Jobdesc: x', 'Planning: y', 'Kategori: c', 'Qty Plan: n').
     Lines with fewer than 5 parts are not summaries (the drop_review notice,
-    chatter) and are ignored; a summary-shaped line that will not parse
-    makes the whole reply unparseable (a confirm turn then scores 0 fields).
+    chatter) and are ignored; a summary-shaped line with more than 10 parts
+    (5 required + keterangan + 4 labeled) makes the whole reply unparseable
+    (a confirm turn then scores 0 fields).
     """
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, str | int]] = []
     for line in (reply or "").splitlines():
         parts = [part.strip() for part in line.split("|")]
         if len(parts) < 5:
             continue
-        if len(parts) > 6:
+        if len(parts) > 10:
             return []
         parts[-1] = _clean_last_part(parts[-1])
         nama, proyek, tanggal, jenis, jam = parts[:5]
@@ -477,7 +533,7 @@ def parse_summary(reply: str | None) -> list[dict[str, str]]:
         if not _DATE.match(tanggal) or not _TIME_RANGE.match(jam):
             return []
         mulai, _, selesai = jam.partition("-")
-        row = {
+        row: dict[str, str | int] = {
             "nama_karyawan": nama,
             "nama_proyek": proyek,
             "tanggal": tanggal,
@@ -486,8 +542,28 @@ def parse_summary(reply: str | None) -> list[dict[str, str]]:
         }
         if selesai:
             row["jam_selesai"] = selesai
-        for key, value in zip(_SUMMARY_OPTIONAL, parts[5:]):
-            if value:
-                row[key] = value
+        keterangan_claimed = False
+        for part in parts[5:]:
+            for prefix, key in _SUMMARY_LABELED:
+                if part.startswith(prefix):
+                    value = part[len(prefix):].strip()
+                    if value:
+                        # plan_qty is an integer in the tool schema; the
+                        # summary prints it plain, so coerce digits back or
+                        # the row guard would mismatch every call.
+                        row[key] = (
+                            int(value)
+                            if key == "plan_qty" and value.isdigit()
+                            else value
+                        )
+                    break
+            else:
+                # First unlabeled part is keterangan (claimed even when
+                # empty, so a later stray column can never become it);
+                # unrecognized parts within the 10-part cap are ignored.
+                if not keterangan_claimed:
+                    keterangan_claimed = True
+                    if part:
+                        row["keterangan"] = part
         rows.append(row)
     return rows

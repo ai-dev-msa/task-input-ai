@@ -4,7 +4,13 @@ from datetime import datetime, timezone
 from alokasi_agent import run
 from alokasi_agent.agent import _asks_about_jam_selesai, _find_calls, _resolve_name
 from alokasi_agent.llm import to_openai_tools
-from alokasi_agent.schema import CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL
+from alokasi_agent.schema import (
+    CHECK_EMPLOYEE_TOOL,
+    CHECK_PROJECT_TOOL,
+    CREATE_ALOKASI_TOOL,
+    FIND_EMPLOYEE_TOOL,
+    FIND_PROJECT_TOOL,
+)
 
 EXAMPLE_MESSAGE = (
     "Isikan alokasi untuk Imam Ihsani tanggal 29 September 2026 dengan pekerjaan "
@@ -105,7 +111,7 @@ def test_guard_nudges_then_returns_corrected_reply():
     assert env["reply"] == GUARD_OK
     assert len(calls) == 2
     assert calls[1]["messages"][-1]["role"] == "user"
-    assert "Jam_selesai opsional" in calls[1]["messages"][-1]["content"]
+    assert "jam_selesai dengan null" in calls[1]["messages"][-1]["content"]
     # the nudge round never leaks into the history the frontend sees
     assert [t["role"] for t in history] == ["user", "assistant"]
     assert history[1]["content"] == GUARD_OK
@@ -271,8 +277,9 @@ def test_multi_row_invalid_twice_returns_error_envelope():
 
 def test_text_reply_with_none_content_normalizes_history():
     env, history = call_run(make_stub([text_reply(None)], []))
-    assert env["reply"] is None
-    assert history[1] == {"role": "assistant", "content": ""}
+    # An empty model reply is replaced with a friendly error text (never null).
+    assert env["reply"] == "Maaf, AI lokal/OpenAI sedang ada galat."
+    assert history[1] == {"role": "assistant", "content": env["reply"]}
 
 
 def test_system_prompt_never_carries_the_lists():
@@ -289,9 +296,13 @@ def test_system_prompt_never_carries_the_lists():
 def test_tools_attached_match_contract():
     calls = []
     call_run(make_stub([text_reply("ok")], calls))
-    assert calls[0]["tools"] == to_openai_tools(
-        CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL
-    )
+    assert calls[0]["tools"] == to_openai_tools([
+        CREATE_ALOKASI_TOOL,
+        CHECK_PROJECT_TOOL,
+        CHECK_EMPLOYEE_TOOL,
+        FIND_EMPLOYEE_TOOL,
+        FIND_PROJECT_TOOL,
+    ])
 
 
 def test_history_defaults_are_independent():
@@ -473,8 +484,8 @@ def test_unknown_project_redirects_to_find_project():
     assert "find_project" in round2_tools[0]["content"]
     round3_tools = [m for m in calls[2]["messages"] if m["role"] == "tool"]
     assert round3_tools[-1]["content"] == (
-        'No exact match for "OPRS WIN". Closest: OPRS Divisi WIN 2026. '
-        "Ask the user which one is meant."
+        'RESULT: no exact match for "OPRS WIN". '
+        "Candidates: OPRS Divisi WIN 2026"
     )
 
 
@@ -508,10 +519,7 @@ def test_no_close_candidate_ends_in_model_question():
     assert env["type"] == "text"
     assert env["reply"] == 'Proyek "zzz qqq" nggak ada. Proyeknya yang mana?'
     round3_tools = [m for m in calls[2]["messages"] if m["role"] == "tool"]
-    assert round3_tools[-1]["content"] == (
-        '"zzz qqq" not found in the project list. '
-        "Ask the user to write the full name or check the spelling."
-    )
+    assert round3_tools[-1]["content"] == 'RESULT: no match for "zzz qqq".'
 
 
 def test_unknown_employee_redirects_to_find_employee():
@@ -610,7 +618,7 @@ def test_find_and_create_in_same_turn_replies_to_all():
     assert len(calls) == 2
     round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
     assert [m["tool_call_id"] for m in round2_tools] == ["call_f1", "call_1"]
-    assert round2_tools[0]["content"] == "Matched: OPRS Divisi WIN 2026"
+    assert round2_tools[0]["content"] == "RESULT: exact match: OPRS Divisi WIN 2026"
     assert round2_tools[1]["content"] == "OK"
 
 
@@ -623,7 +631,7 @@ def test_find_employee_with_empty_list_reports_unavailable():
     env, _ = call_run(stub, employees=[])
     assert env["type"] == "text"
     round2_tools = [m for m in calls[1]["messages"] if m["role"] == "tool"]
-    assert round2_tools[0]["content"] == "The employee list is unavailable, try again later."
+    assert round2_tools[0]["content"] == "RESULT: employee list unavailable."
 
 
 # --- employee list validation (server-fetched lists) ---
@@ -846,32 +854,32 @@ def test_row_guard_fr05_shrink_recovered():
 # --- find_* name resolution (difflib, no LLM) ---
 
 def test_resolve_name_exact_match_returns_canonical_spelling():
-    assert _resolve_name("imam ihsani", "find_employee", EMPLOYEES) == "Matched: Imam Ihsani"
+    assert _resolve_name("imam ihsani", "find_employee", EMPLOYEES) == (
+        "RESULT: exact match: Imam Ihsani"
+    )
 
 
 def test_resolve_name_returns_candidates_for_near_match():
     result = _resolve_name("Imam", "find_employee", ["Imam Ihsani", "Imam Hidayat"])
-    assert result.startswith('No exact match for "Imam". Closest: ')
+    assert result.startswith('RESULT: no exact match for "Imam". Candidates: ')
     assert "Imam Ihsani" in result and "Imam Hidayat" in result
-    assert result.endswith("Ask the user which one is meant.")
 
 
 def test_resolve_name_not_found():
     assert _resolve_name("zzz qqq", "find_project", PROJECTS) == (
-        '"zzz qqq" not found in the project list. '
-        "Ask the user to write the full name or check the spelling."
+        'RESULT: no match for "zzz qqq".'
     )
 
 
 def test_resolve_name_empty_list_is_unavailable():
     assert _resolve_name("Anyone", "find_employee", []) == (
-        "The employee list is unavailable, try again later."
+        "RESULT: employee list unavailable."
     )
 
 
 def test_resolve_name_unreadable_name_asks_to_retry():
     assert _resolve_name("", "find_employee", EMPLOYEES) == (
-        'Could not read the name. Call again with {"name": "..."} as plain text.'
+        'RESULT: name unreadable. Call again with {"name": "..."}.'
     )
 
 
@@ -908,19 +916,21 @@ REAL_PROJECTS = [
 def test_full_project_names_resolve_to_their_own_sibling():
     # Each complete name matches its own spelling, never a same-prefix sibling.
     for name in REAL_PROJECTS:
-        assert _resolve_name(name, "find_project", REAL_PROJECTS) == f"Matched: {name}"
+        assert _resolve_name(name, "find_project", REAL_PROJECTS) == (
+            f"RESULT: exact match: {name}"
+        )
 
 
 def test_full_project_name_match_ignores_case_and_padding():
     assert (
         _resolve_name("  oprs divisi win 2026 ", "find_project", REAL_PROJECTS)
-        == "Matched: OPRS Divisi WIN 2026"
+        == "RESULT: exact match: OPRS Divisi WIN 2026"
     )
     assert (
         _resolve_name(
             "relokasi fo ruas jalan bii bandung tahap 4", "find_project", REAL_PROJECTS
         )
-        == "Matched: Relokasi FO Ruas Jalan BII Bandung Tahap 4"
+        == "RESULT: exact match: Relokasi FO Ruas Jalan BII Bandung Tahap 4"
     )
 
 
@@ -929,14 +939,12 @@ def test_oprs_abbreviation_returns_sibling_candidates():
     # 0.571 against the full name — below cutoff 0.6 it used to come back
     # "not found" with no candidates at all.
     assert _resolve_name("OPRS WIN", "find_project", REAL_PROJECTS) == (
-        'No exact match for "OPRS WIN". '
-        "Closest: OPRS Divisi WIN 2026, OPRS Divisi FIN 2026. "
-        "Ask the user which one is meant."
+        'RESULT: no exact match for "OPRS WIN". '
+        "Candidates: OPRS Divisi WIN 2026; OPRS Divisi FIN 2026"
     )
     assert _resolve_name("OPRS HRD", "find_project", REAL_PROJECTS) == (
-        'No exact match for "OPRS HRD". '
-        "Closest: OPRS Divisi HRD 2026. "
-        "Ask the user which one is meant."
+        'RESULT: no exact match for "OPRS HRD". '
+        "Candidates: OPRS Divisi HRD 2026"
     )
 
 
@@ -944,7 +952,7 @@ def test_near_full_variants_return_the_right_candidates():
     # One word missing from an otherwise complete name must still surface
     # the official spelling for the model to offer.
     result = _resolve_name("OPRS WIN 2026", "find_project", REAL_PROJECTS)
-    assert result.startswith('No exact match for "OPRS WIN 2026". Closest: ')
+    assert result.startswith('RESULT: no exact match for "OPRS WIN 2026". Candidates: ')
     assert "OPRS Divisi WIN 2026" in result
 
     result = _resolve_name(
@@ -963,7 +971,7 @@ def test_prefix_only_input_never_validates_as_a_name():
     # not-found only, so a prefix never passes as a project name.
     for prefix in ("OPRS", "OPRS Div", "Managed Service -", "Relokasi FO Ruas"):
         result = _resolve_name(prefix, "find_project", REAL_PROJECTS)
-        assert not result.startswith("Matched:"), result
+        assert not result.startswith("RESULT: exact match:"), result
 
 
 def test_full_project_name_accepted_in_one_round():
@@ -995,8 +1003,8 @@ def test_oprs_abbreviation_flow_shows_candidates_then_corrects():
     assert json.loads(env["arguments"])["nama_proyek"] == "OPRS Divisi HRD 2026"
     round3_tools = [m for m in calls[2]["messages"] if m["role"] == "tool"]
     assert round3_tools[-1]["content"] == (
-        'No exact match for "OPRS HRD". Closest: OPRS Divisi HRD 2026. '
-        "Ask the user which one is meant."
+        'RESULT: no exact match for "OPRS HRD". '
+        "Candidates: OPRS Divisi HRD 2026"
     )
 
 

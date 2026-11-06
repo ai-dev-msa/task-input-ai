@@ -299,7 +299,7 @@ def _canonicalize_row(
     return raw if not changed else json.dumps(args, separators=(",", ":"))
 
 
-def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
+def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str | int]]:
     """Structured rows from the pending confirmation summary, or [].
 
     The last assistant turn is the summary the user is confirming; prompt's
@@ -313,7 +313,7 @@ def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
     return []
 
 
-def _same_rows(calls: list[dict[str, Any]], confirmed: list[dict[str, str]]) -> bool:
+def _same_rows(calls: list[dict[str, Any]], confirmed: list[dict[str, str | int]]) -> bool:
     """True when the model's calls are exactly the confirmed rows (any order).
 
     Null values count as absent: a call sending "keterangan": null matches a
@@ -321,6 +321,9 @@ def _same_rows(calls: list[dict[str, Any]], confirmed: list[dict[str, str]]) -> 
     FR-05 already rejected null on required fields, so dropping None for
     any key here only ever hits optionals.
     """
+    emitted = [json.loads(tc["function"].get("arguments", "")) for tc in calls]
+    return canonical(emitted) == canonical(confirmed)
+
 
 def canonical(rows):
     # parse_summary strips a trailing "." from the last column, so
@@ -336,9 +339,6 @@ def canonical(rows):
     return sorted(
         json.dumps(row, sort_keys=True, ensure_ascii=False) for row in cleaned
     )
-
-    emitted = [json.loads(tc["function"].get("arguments", "")) for tc in calls]
-    return canonical(emitted) == canonical(confirmed)
 
 
 def run(

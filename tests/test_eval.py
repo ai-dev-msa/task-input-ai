@@ -133,12 +133,95 @@ def test_parse_summary_empty_required_part_returns_nothing():
 
 
 def test_parse_summary_too_many_parts_returns_nothing():
-    assert parse_summary(SUMMARY_LINE.replace(". Benar?", " | a | b | c. Benar?")) == []
+    # Cap is 10 parts (5 required + keterangan + 4 labeled slots); above it
+    # the whole reply is unparseable.
+    line = SUMMARY_LINE.replace(
+        ". Benar?", " | a | b | c | d | e | f | g. Benar?"
+    )  # 5 + 7 = 12 parts
+    assert parse_summary(line) == []
 
 
 def test_parse_summary_empty_optional_part_is_dropped():
     line = SUMMARY_LINE.replace(". Benar?", " | . Benar?")
     assert parse_summary(line) == [ROW]
+
+
+def test_parse_summary_labeled_slots():
+    line = (
+        "Dimas Eka Priyadi | Instalasi Elektronik GPON FDT Retail Intermoda "
+        "| 2026-09-03 | splicing fiber optik | 09:00-17:30 "
+        "| Jobdesc: tes it | Planning: Development modul baru. Benar?"
+    )
+    rows = parse_summary(line)
+    assert rows == [
+        {
+            "nama_karyawan": "Dimas Eka Priyadi",
+            "nama_proyek": "Instalasi Elektronik GPON FDT Retail Intermoda",
+            "tanggal": "2026-09-03",
+            "jenis_pekerjaan": "splicing fiber optik",
+            "jam_mulai": "09:00",
+            "jam_selesai": "17:30",
+            "jobdesc": "tes it",
+            "planning": "Development modul baru",
+        }
+    ]
+
+
+def test_parse_summary_kategori_and_plan_qty():
+    line = (
+        "Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN "
+        "| 09:00-12:00 | Kategori: Pekerjaan Civil | Qty Plan: 5. Benar?"
+    )
+    rows = parse_summary(line)
+    assert rows[0]["kategori_pekerjaan"] == "Pekerjaan Civil"
+    # plan_qty must be an int: the tool call emits 5, and the row guard
+    # compares parsed rows against the emitted JSON.
+    assert rows[0]["plan_qty"] == 5
+    assert isinstance(rows[0]["plan_qty"], int)
+
+
+def test_parse_summary_label_prefix_is_not_keterangan():
+    # No keterangan: the first slot after the required parts starts with a
+    # label prefix, so it must not be read as keterangan.
+    line = (
+        "Imam Ihsani | OPRS Divisi WIN 2026 | 2026-09-29 | Development Modul PPN "
+        "| 09:00-12:00 | Jobdesc: tes it. Benar?"
+    )
+    rows = parse_summary(line)
+    assert rows[0]["jobdesc"] == "tes it"
+    assert "keterangan" not in rows[0]
+
+
+def test_parse_summary_ten_parts_parse_eleven_do_not():
+    base = " | ".join(
+        [
+            "Imam Ihsani",
+            "OPRS Divisi WIN 2026",
+            "2026-09-29",
+            "Development Modul PPN",
+            "09:00-12:00",
+            "[1/1/1/0] Done",
+            "Jobdesc: a",
+            "Planning: b",
+            "Kategori: c",
+            "Qty Plan: 5",
+        ]
+    )
+    ten = parse_summary(base + ". Benar?")
+    assert len(ten) == 1
+    assert ten[0]["keterangan"] == "[1/1/1/0] Done"
+    assert ten[0]["jobdesc"] == "a"
+    assert ten[0]["plan_qty"] == 5
+    assert parse_summary(base + " | extra. Benar?") == []
+
+
+def test_parse_summary_ignores_unknown_slots_within_cap():
+    line = SUMMARY_LINE.replace(
+        ". Benar?", " | [1/1/1/0] Done | junk1 | junk2. Benar?"
+    )  # 8 parts: keterangan + two unrecognized slots
+    rows = parse_summary(line)
+    assert len(rows) == 1
+    assert rows[0]["keterangan"] == "[1/1/1/0] Done"
 
 
 def test_parse_summary_no_summary():

@@ -150,7 +150,8 @@ from alokasi_agent.schema import FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL
 
 
 def test_to_openai_tools_accepts_multiple_tools():
-    tools = to_openai_tools(CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL)
+    # Production passes one list (agent.py attaches the whole tool list).
+    tools = to_openai_tools([CREATE_ALOKASI_TOOL, FIND_EMPLOYEE_TOOL, FIND_PROJECT_TOOL])
     assert [t["function"]["name"] for t in tools] == [
         "create_alokasi",
         "find_employee",

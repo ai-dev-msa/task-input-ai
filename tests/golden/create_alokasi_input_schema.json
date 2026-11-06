@@ -8,7 +8,7 @@
       "type": "string"
     },
     "jam_selesai": {
-      "description": "Jam selesai dalam format HH:MM, contoh: 12:00",
+      "description": "Jam selesai HH:MM, contoh: 12:00. Opsional: null jika user tidak menyebutnya",
       "pattern": "^\\d{2}:\\d{2}$",
       "title": "Jam Selesai",
       "type": [
@@ -22,11 +22,26 @@
       "title": "Jenis Pekerjaan",
       "type": "string"
     },
+    "jobdesc": {
+      "description": "Nama jobdesc sesuai pilihan pengguna. Kirim sebagai teks, bukan ID. Jangan mengarang nama.",
+      "minLength": 1,
+      "title": "Jobdesc",
+      "type": "string"
+    },
+    "kategori_pekerjaan": {
+      "description": "Nama kategori pekerjaan sesuai BoQ proyek. Wajib untuk karyawan MSA divisi 1. Untuk pekerjaan Standby, isi dengan Standby.",
+      "minLength": 1,
+      "title": "Kategori",
+      "type": "string"
+    },
     "keterangan": {
-      "description": "Status/hasil pekerjaan dalam format [a/b/c/d], contoh: [2/1/1/0]",
+      "description": "Status/hasil pekerjaan, tanpa kata label (review/hasil/keterangan). Boleh bracket [a/b/c/d] (contoh: [2/1/1/0]) atau teks biasa (contoh: sudah selesai)",
       "minLength": 1,
       "title": "Keterangan",
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "nama_karyawan": {
       "description": "Nama lengkap karyawan, contoh: Imam Ihsani",
@@ -38,6 +53,18 @@
       "description": "Nama proyek, contoh: OPRS Divisi WIN 2026",
       "minLength": 1,
       "title": "Nama Proyek",
+      "type": "string"
+    },
+    "plan_qty": {
+      "description": "Jumlah rencana pekerjaan dalam angka. Wajib untuk karyawan MSA divisi 1, kecuali Standby yang otomatis menggunakan nilai 1.",
+      "minimum": 1,
+      "title": "Qty Plan",
+      "type": "integer"
+    },
+    "planning": {
+      "description": "Nama aktivitas planning sesuai pilihan pengguna. Kirim sebagai teks, bukan ID. Jangan mengarang nama.",
+      "minLength": 1,
+      "title": "Planning",
       "type": "string"
     },
     "tanggal": {

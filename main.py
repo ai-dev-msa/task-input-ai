@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-# from alokasi_agent import run
 import json
 import os
 import requests
@@ -11,6 +10,10 @@ from zoneinfo import ZoneInfo # jangan lupa tambahin karena ada time.monotonic /
 
 import sys
 sys.path.insert(0, "/var/www/html/msaai/ai-service/app/src")
+
+import threading #tambahan ihsan 2 11 2026 (install plugin)
+from watchdog.observers import Observer #tambahan ihsan 2 11 2026 (install plugin)
+from watchdog.events import FileSystemEventHandler #tambahan ihsan 2 11 2026 (install plugin)
 
 from alokasi_agent import run
 
@@ -134,6 +137,8 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    # Set once run() returns; the error path below reuses its history.
+    body = None
     try:
         data = request.get_json(silent=True) or {}
 
@@ -210,28 +215,39 @@ def chat():
             #//++VVVVVV
 
             #++VVVVVV Kirim data ke API ERP CI3
-            # One POST per row.
+            # One POST per row. A row that fails (connection, bad body) is
+            # reported as a failed result instead of killing the batch, so
+            # the caller still sees which rows were saved.
             results = []
-            for row in rows:
-                response_ci3 = requests.post(
-                    "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/createAlokasi",
-                    json=row,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json"
-                    },
-                    timeout=30
-                )
+            for i, row in enumerate(rows, start=1):
+                try:
+                    response_ci3 = requests.post(
+                        "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/createAlokasi",
+                        json=row,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json"
+                        },
+                        timeout=30
+                    )
 
-                #++VVVVVV DEBUG RESPONSE
-                print("CI3 HTTP STATUS:", response_ci3.status_code)
-                print("CI3 RESPONSE:", response_ci3.text)
-                #//++VVVVVV
+                    #++VVVVVV DEBUG RESPONSE
+                    print("CI3 HTTP STATUS:", response_ci3.status_code)
+                    print("CI3 RESPONSE:", response_ci3.text)
+                    #//++VVVVVV
 
-                #++VVVVVV Ambil response dari API ERP CI3
-                hasil_ci3 = response_ci3.json()
-                results.append(hasil_ci3)
-                #//++VVVVVV
+                    #++VVVVVV Ambil response dari API ERP CI3
+                    hasil_ci3 = response_ci3.json()
+                    results.append(hasil_ci3)
+                    #//++VVVVVV
+                except Exception as row_err:
+                    # Log the real error server-side; the caller gets a
+                    # generic message, never the exception text.
+                    print(f"ERROR /chat baris {i}:", repr(row_err))
+                    results.append({
+                        "success": False,
+                        "message": f"Baris {i} gagal dikirim ke ERP, coba lagi.",
+                    })
 
             # One row keeps hasil_ci3 an object (the shape callers know);
             # several rows return an array of results.
@@ -266,7 +282,10 @@ def chat():
             "raw_message": user_message,
             "user_id": user_id,
             "reply": "Terjadi kesalahan, coba lagi.",
-            "history": data.get("history") or []
+            # Prefer the envelope's history: run() already appended this turn,
+            # while data["history"] is what the client sent (one turn stale).
+            # None when run() itself failed before returning an envelope.
+            "history": (body or {}).get("history") or data.get("history") or []
         })
 
 
