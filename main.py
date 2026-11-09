@@ -24,17 +24,57 @@ load_dotenv("/var/www/html/msaai/.env", override=True)
 app = Flask(__name__)
 
 
-
+#register controller-cotroller modul yang udah dibuat di src
 from modules.proyek import proyek_bp
+from modules.proyek.routes import controller as proyek_controller
 app.register_blueprint(proyek_bp)
 
 from modules.karyawan import karyawan_bp #tiap kali bikin module langsung register ke sini yak //notes
+from modules.karyawan.routes import controller as karyawan_controller
 app.register_blueprint(karyawan_bp) #//notes
 
 # Satu TTL untuk cache proyek & token ERP (detik).
 CACHE_TTL = float(os.getenv("ALOKASI_CACHE_TTL", "300"))
 _cache = {}
 
+#tambahan ihsan 2 11 2026 (auto save code tanpa restart server)
+class AutoReloadHandler(FileSystemEventHandler):
+
+    def __init__(self):
+        self.timer = None
+        self.lock = threading.Lock()
+
+    def on_any_event(self, event):
+        if event.event_type not in ('modified', 'created', 'deleted', 'moved'):
+            return
+
+        if event.is_directory:
+            return
+
+        path = event.src_path
+
+        if not path.endswith('.py'):
+            return
+
+        if '__pycache__' in path:
+            return
+
+        with self.lock:
+            if self.timer:
+                self.timer.cancel()
+
+            self.timer = threading.Timer(1.5, self.restart_app)
+            self.timer.daemon = True
+            self.timer.start()
+
+    def restart_app(self):
+        print(
+            "Perubahan file Python terdeteksi. Menghentikan aplikasi untuk restart...",
+            flush=True
+        )
+
+        os.kill(os.getpid(), 15)
+# ====================
 
 def _cache_get(key):
     hit = _cache.get(key)
@@ -69,6 +109,7 @@ def get_projects():
     Kalau gagal, kembalikan [] dan biarkan /chat pakai projects dari body."""
     cached = _cache_get("projects")
     if cached is not None:
+        print("Menggunakan cache projects:", len(cached), flush=True) # debug
         return cached
     names = []
     ok = True
@@ -81,6 +122,18 @@ def get_projects():
                 names += _names_from(response.get_json().get("data"))
             else:
                 ok = False
+        #()()())( DEBUG DAFTAR PROYEK - AWAL
+        print("Tahun proyek:", tahun, flush=True)
+        print("Jumlah nama proyek sebelum merge:", len(names), flush=True)
+        print(
+            "Proyek Bandung/OPRS:",
+            [
+                name for name in names
+                if "bandung" in name.lower() or "oprs" in name.lower()
+            ],
+            flush=True
+        )
+        #()()())( DEBUG DAFTAR PROYEK - AKHIR
     except Exception as exc:
         print("get_projects gagal:", repr(exc))
         ok = False
@@ -96,7 +149,159 @@ def get_projects():
             seen.add(key)
             merged.append(name.strip())
     _cache_set("projects", merged)
+    #()()())( DEBUG HASIL AKHIR PROJECTS - AWAL
+    print("Jumlah proyek setelah merge:", len(merged), flush=True)
+    print(
+        "Hasil akhir OPRS Bandung:",
+        [
+            name for name in merged
+            if "bandung" in name.lower() or "oprs" in name.lower()
+        ],
+        flush=True
+    )
+    #()()())( DEBUG HASIL AKHIR PROJECTS - AKHIR
     return merged
+
+def check_project_by_name(nama_proyek):
+    try:
+        token = get_erp_token()
+
+        response, status = proyek_controller.getProyekByName(
+            nama_proyek,
+            token
+        )
+
+        if status != 200:
+            return None
+
+        result = response.get_json() or {}
+
+        if not result.get("success"):
+            return None
+
+        hasil = result.get("data", [])
+
+        while isinstance(hasil, dict) and "data" in hasil:
+            hasil = hasil["data"]
+
+        if isinstance(hasil, dict):
+            hasil = [hasil]
+
+        if not isinstance(hasil, list):
+            return None
+
+        # nama_dicari = nama_proyek.strip().casefold()
+        nama_dicari = str(nama_proyek or "").strip().casefold()
+
+
+        return [
+            item for item in hasil
+            if isinstance(item, dict)
+            and nama_dicari in str(item.get("nama_proyek", "")).strip().casefold()
+                # == nama_dicari
+        ]
+
+    except Exception as exc:
+        print("check_project_by_name gagal:", repr(exc), flush=True)
+        return None
+
+def get_employees():
+    cached = _cache_get("employees")
+
+    if cached is not None:
+        return cached
+
+    employees = []
+
+    try:
+        token = get_erp_token()
+
+        response = requests.get(
+            "https://appweb.mitrasinergi.co.id/msa/apiv1/aikaryawan/getListKaryawanAktif",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            timeout=30
+        )
+
+        if response.status_code != 200:
+            print(
+                "get_employees gagal:",
+                response.status_code,
+                response.text,
+                flush=True
+            )
+            return []
+
+        hasil = response.json()
+
+        if (
+            isinstance(hasil, dict)
+            and hasil.get("success") is True
+            and isinstance(hasil.get("data"), list)
+        ):
+            for item in hasil["data"]:
+                if isinstance(item, dict) and item.get("nama"):
+                    employees.append(
+                        str(item["nama"]).strip()
+                    )
+
+        #++VVVVVV Dedupe nama
+        seen = set()
+        result = []
+
+        for name in employees:
+            key = name.casefold()
+
+            if key not in seen:
+                seen.add(key)
+                result.append(name)
+
+        employees = result
+        #//++VVVVVV
+
+        print(
+            "Jumlah employee aktif:",
+            len(employees),
+            flush=True
+        )
+
+        _cache_set("employees", employees)
+
+        return employees
+
+    except Exception as exc:
+        print(
+            "get_employees exception:",
+            repr(exc),
+            flush=True
+        )
+        return []
+
+def check_employee_by_name(nama_karyawan):
+    try:
+        keyword = str(nama_karyawan or "").strip()
+
+        if not keyword:
+            return []
+
+        employees = get_employees()
+
+        hasil = [
+            nama for nama in employees
+            if keyword.casefold() in nama.casefold()
+        ]
+
+        return hasil
+
+    except Exception as exc:
+        print(
+            "check_employee_by_name gagal:",
+            repr(exc),
+            flush=True
+        )
+        return None
 
 #cors ini buat nembak endpoint python ke mis
 CORS(
@@ -137,8 +342,6 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    # Set once run() returns; the error path below reuses its history.
-    body = None
     try:
         data = request.get_json(silent=True) or {}
 
@@ -153,52 +356,171 @@ def chat():
 
         user_message = data.get("message")
         user_id = data.get("user_id")
-
-        #++VVVVVV Format tools untuk Responses API (DIHAPUS dari sini karena
-        # kode AI track): sekarang ada di src/alokasi_agent/schema.py ->
-        # CREATE_ALOKASI_TOOL
-        #//++VVVVVV
-
-        #++VVVVVV System prompt (DIHAPUS dari sini karena
-        # kode AI track): sekarang ada di src/alokasi_agent/prompt.py ->
-        # PROMPT_TEMPLATE
-        #//++VVVVVV
-
-        #++VVVVVV Panggil Responses API (DIHAPUS dari sini karena
-        # kode AI track): sekarang ada di src/alokasi_agent/llm.py ->
-        # complete()
-        #//++VVVVVV
-
-        # 1) All AI logic lives in run(). It returns (envelope, history);
-        #    the envelope already contains reply + history.
-        # Proyek dari endpoint server (cached); body hanya fallback.
-        projects = get_projects() or (data.get("projects") or [])        
+        user_name = data.get("user_name") or ""
+        id_divisi = data.get("id_divisi")
+        projects = get_projects() or (data.get("projects") or [])
+        employees = get_employees() or (data.get("employees") or [])
+       
         envelope, _history = run(
             user_message,
-            user_name=data.get("user_name") or "",
-            employees=data.get("employees") or [],
-            # projects=data.get("projects") or [],
-            projects=projects, #kalau udah buat controller project manggilnya langsung begini aja //notes
+            user_name=user_name,
+            employees=employees, 
+            projects=projects, 
             history=data.get("history") or [],
             user_id=user_id,
+            id_divisi = id_divisi
         )
-        body = dict(envelope)
+        body = dict(envelope) #ini buat nampilin di response
+        body["user_name"] = user_name #ini buat nampilin di response
+        body["id_divisi"] = id_divisi #ini buat nampilin di response
 
-        #++VVVVVV Cari function call / ambil arguments (DIHAPUS dari sini karena
-        # kode AI track): sekarang ada di src/alokasi_agent/agent.py -> run(),
-        # yang mengembalikan envelope berisi type, arguments, reply, history
-        #//++VVVVVV
-
-        # 2) The backend half (kept from the old file): only a confirmed
-        #    tool call is written to the ERP.
         if body["type"] == "function_call":
+
+            #cek keberadaan proyek
+            if body.get("function_name") == "check_project":
+                arguments = json.loads(body.get("arguments") or "{}")
+                nama_proyek = str(
+                    arguments.get("nama_proyek", "")
+                ).strip()
+
+                hasil_cek = (
+                    check_project_by_name(nama_proyek)
+                    if nama_proyek
+                    else None
+                )
+
+                if hasil_cek is None:
+                    body["success"] = False
+                    reply = (
+                        "Pengecekan proyek ke MIS gagal. "
+                        "Silakan coba lagi."
+                    )
+                elif hasil_cek:
+                    body["success"] = True
+                    reply = f"Proyek {nama_proyek} tersedia di MIS."
+                else:
+                    body["success"] = True
+                    reply = f"Proyek {nama_proyek} tidak ditemukan di MIS."
+
+                body["type"] = "text"
+                body["function_name"] = ""
+                body["arguments"] = ""
+                body["reply"] = reply
+
+                history = data.get("history") or []
+                body["history"] = [
+                    *history,
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": reply},
+                ]
+
+                return jsonify(body)
+            
+            #cek keberadaan karyawan
+            if body.get("function_name") == "check_employee":
+                arguments = json.loads(body.get("arguments") or "{}")
+
+                nama_karyawan = str(
+                    arguments.get("nama_karyawan", "")
+                ).strip()
+
+                hasil_cek = (
+                    check_employee_by_name(nama_karyawan)
+                    if nama_karyawan
+                    else None
+                )
+
+                if hasil_cek is None:
+                    body["success"] = False
+                    reply = (
+                        "Pengecekan karyawan ke MIS gagal. "
+                        "Silakan coba lagi."
+                    )
+
+                elif hasil_cek:
+                    body["success"] = True
+
+                    daftar_nama = "\n".join(
+                        f"- {nama}" for nama in hasil_cek
+                    )
+
+                    reply = (
+                        f"Karyawan dengan kata kunci "
+                        f'"{nama_karyawan}" ditemukan:\n'
+                        f"{daftar_nama}"
+                    )
+
+                else:
+                    body["success"] = True
+                    reply = (
+                        f'Karyawan aktif dengan kata kunci '
+                        f'"{nama_karyawan}" tidak ditemukan di MIS.'
+                    )
+
+                body["type"] = "text"
+                body["function_name"] = ""
+                body["arguments"] = ""
+                body["reply"] = reply
+
+                history = data.get("history") or []
+                body["history"] = [
+                    *history,
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": reply},
+                ]
+
+                return jsonify(body)
+
+            #++VVVVVV CREATE ALOKASI (KODE LAMA)
             # arguments is a JSON string: one object (single row) or an
             # array of objects (several rows, FR-08).
             arguments = json.loads(body["arguments"])
             single_row = isinstance(arguments, dict)
             rows = [arguments] if single_row else arguments
 
-            # token = os.getenv("ERP_API_TOKEN")
+            #++VVVVVV VALIDASI PROYEK LANGSUNG KE MIS
+            for row in rows:
+                nama_proyek_alokasi = str(
+                    row.get("nama_proyek", "")
+                ).strip()
+
+                if not nama_proyek_alokasi:
+                    body["success"] = False
+                    body["type"] = "text"
+                    body["function_name"] = ""
+                    body["arguments"] = ""
+                    body["reply"] = "Nama proyek wajib diisi."
+                    return jsonify(body)
+
+                hasil_cek = check_project_by_name(
+                    nama_proyek_alokasi
+                )
+
+                if hasil_cek is None:
+                    body["success"] = False
+                    body["type"] = "text"
+                    body["function_name"] = ""
+                    body["arguments"] = ""
+                    body["reply"] = (
+                        "Pengecekan proyek ke MIS gagal. "
+                        "Alokasi belum dikirim. Silakan coba lagi."
+                    )
+                    return jsonify(body)
+
+                if not hasil_cek:
+                    body["success"] = False
+                    body["type"] = "text"
+                    body["function_name"] = ""
+                    body["arguments"] = ""
+                    body["reply"] = (
+                        f'Proyek "{nama_proyek_alokasi}" '
+                        "tidak ditemukan di MIS. "
+                        "Mohon periksa kembali nama proyek."
+                    )
+                    return jsonify(body)
+            #++VVVVVV AKHIR VALIDASI PROYEK LANGSUNG KE MIS
+
+
             token = get_erp_token()
 
             #++VVVVVV TEST TOKEN ERP
@@ -215,59 +537,36 @@ def chat():
             #//++VVVVVV
 
             #++VVVVVV Kirim data ke API ERP CI3
-            # One POST per row. A row that fails (connection, bad body) is
-            # reported as a failed result instead of killing the batch, so
-            # the caller still sees which rows were saved.
             results = []
-            for i, row in enumerate(rows, start=1):
-                try:
-                    response_ci3 = requests.post(
-                        "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/createAlokasi",
-                        json=row,
-                        headers={
-                            "Authorization": f"Bearer {token}",
-                            "Content-Type": "application/json"
-                        },
-                        timeout=30
-                    )
+            for row in rows:
+                response_ci3 = requests.post(
+                    "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/createAlokasi",
+                    json=row,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json"
+                    },
+                    timeout=30
+                )
 
-                    #++VVVVVV DEBUG RESPONSE
-                    print("CI3 HTTP STATUS:", response_ci3.status_code)
-                    print("CI3 RESPONSE:", response_ci3.text)
-                    #//++VVVVVV
+                #++VVVVVV DEBUG RESPONSE
+                print("CI3 HTTP STATUS:", response_ci3.status_code)
+                print("CI3 RESPONSE:", response_ci3.text)
+                #//++VVVVVV
 
-                    #++VVVVVV Ambil response dari API ERP CI3
-                    hasil_ci3 = response_ci3.json()
-                    results.append(hasil_ci3)
-                    #//++VVVVVV
-                except Exception as row_err:
-                    # Log the real error server-side; the caller gets a
-                    # generic message, never the exception text.
-                    print(f"ERROR /chat baris {i}:", repr(row_err))
-                    results.append({
-                        "success": False,
-                        "message": f"Baris {i} gagal dikirim ke ERP, coba lagi.",
-                    })
+                #++VVVVVV Ambil response dari API ERP CI3
+                hasil_ci3 = response_ci3.json()
+                results.append(hasil_ci3)
+                #//++VVVVVV
 
-            # One row keeps hasil_ci3 an object (the shape callers know);
-            # several rows return an array of results.
             body["hasil_ci3"] = results[0] if single_row else results
-            # NEW: one combined message for the web app to show.
-            saved = sum(
-                r.get("jumlah", 1)
-                for r in results
-                if isinstance(r, dict) and r.get("success")
-            )
-            body["ringkasan"] = f"{saved} dari {len(rows)} alokasi berhasil dibuat"
-
             return jsonify(body)
-            #//++VVVVVV
+            #//++VVVVVV AKHIR CREATE ALOKASI
 
-        #++VVVVVV Jika tidak ada function call (DIHAPUS dari sini karena
-        # kode AI track): balasan teks sudah disiapkan run() di
-        # src/alokasi_agent/agent.py (ada di field reply envelope)
+        #++VVVVVV Balasan teks biasa
         return jsonify(body)
         #//++VVVVVV
+
 
 
     except Exception as e:
@@ -282,10 +581,7 @@ def chat():
             "raw_message": user_message,
             "user_id": user_id,
             "reply": "Terjadi kesalahan, coba lagi.",
-            # Prefer the envelope's history: run() already appended this turn,
-            # while data["history"] is what the client sent (one turn stale).
-            # None when run() itself failed before returning an envelope.
-            "history": (body or {}).get("history") or data.get("history") or []
+            "history": data.get("history") or []
         })
 
 
@@ -348,9 +644,36 @@ def get_erp_token():
     return token
 
 #ini buat kalau server mati/venv ga jalan biar gausah debug/gausah nampilin eror
+# if __name__ == "__main__":
+#     app.run(
+#         host="0.0.0.0",
+#         port=5001,
+#         debug=False
+#     )
+
+# tambahan ihsan 2 11 2026 (ini berfungsi buat misal abis ngubah script ga perlu restart server)
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=5001,
-        debug=False
+
+    observer = Observer()
+    handler = AutoReloadHandler()
+
+    observer.schedule(
+        handler,
+        path=os.path.dirname(os.path.abspath(__file__)),
+        recursive=True
     )
+
+    observer.start()
+
+    print("MSA AI Auto Reload aktif.", flush=True)
+
+    try:
+        app.run(
+            host="0.0.0.0",
+            port=5001,
+            debug=False,
+            use_reloader=False
+        )
+    finally:
+        observer.stop()
+        observer.join()
