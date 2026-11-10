@@ -36,7 +36,7 @@ app.register_blueprint(karyawan_bp) #//notes
 from modules.alokasi import alokasi_bp
 from modules.alokasi.routes import controller as alokasi_controller
 app.register_blueprint(alokasi_bp)
-from modules.alokasi import model as alokasi_model
+#from modules.alokasi import model as alokasi_model
 
 # Satu TTL untuk cache proyek & token ERP (detik).
 CACHE_TTL = float(os.getenv("ALOKASI_CACHE_TTL", "300"))
@@ -221,36 +221,35 @@ def get_employees():
     try:
         token = get_erp_token()
 
-        response = requests.get(
-            "https://appweb.mitrasinergi.co.id/msa/apiv1/aikaryawan/getListKaryawanAktif",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json"
-            },
-            timeout=30
-        )
+        response, status_code = karyawan_controller.getListKaryawanAktif(token)
 
-        if response.status_code != 200:
+        if status_code != 200:
             print(
                 "get_employees gagal:",
-                response.status_code,
-                response.text,
+                status_code,
+                response.get_json(),
                 flush=True
             )
             return []
 
-        hasil = response.json()
+        hasil = response.get_json()
 
-        if (
-            isinstance(hasil, dict)
-            and hasil.get("success") is True
-            and isinstance(hasil.get("data"), list)
-        ):
-            for item in hasil["data"]:
+        if not isinstance(hasil, dict) or hasil.get("success") is not True:
+            raise Exception("Response controller karyawan tidak valid")
+
+        data = hasil.get("data", [])
+
+        # Menyesuaikan response MIS yang dibungkus controller
+        if isinstance(data, dict):
+            data = data.get("data", [])
+
+        if isinstance(data, list):
+            for item in data:
                 if isinstance(item, dict) and item.get("nama"):
-                    employees.append(
-                        str(item["nama"]).strip()
-                    )
+                    nama = str(item["nama"]).strip()
+
+                    if nama:
+                        employees.append(nama)
 
         #++VVVVVV Dedupe nama
         seen = set()
@@ -310,16 +309,41 @@ def check_employee_by_name(nama_karyawan):
 
 def find_alokasi_by_params(arguments):
     try:
-        rows = alokasi_model.getAlokasiByManyParams(
+        token = get_erp_token()
+
+        response, status_code = alokasi_controller.getAlokasiByManyParams(
             tanggal=arguments.get("tanggal"),
             nama_alokasi=arguments.get("nama_alokasi"),
             kode_proyek=arguments.get("kode_proyek"),
             nama_proyek=arguments.get("nama_proyek"),
             jenis_pekerjaan=arguments.get("jenis_pekerjaan"),
+            token=token
         )
-        return serialize_data(rows)
+
+        hasil = response.get_json()
+
+        if status_code != 200 or not hasil.get("success"):
+            raise Exception(
+                hasil.get("error", "Gagal mengambil data alokasi MIS")
+            )
+
+        # Mengambil data dari response controller
+        data_mis = hasil.get("data", {})
+
+        # Karena response controller membungkus response MIS
+        rows = data_mis.get("data", [])
+
+        if not isinstance(rows, list):
+            raise Exception("Format data alokasi MIS tidak sesuai")
+
+        return rows
+
     except Exception as exc:
-        print("find_alokasi_by_params gagal: ", repr(exc), flush=True)
+        print(
+            "find_alokasi_by_params gagal:",
+            repr(exc),
+            flush=True
+        )
         return None
 
 #cors ini buat nembak endpoint python ke mis
