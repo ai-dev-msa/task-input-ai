@@ -64,6 +64,8 @@ CREATE_ALOKASI_TOOL = {
             },
             "keterangan": {
                 "description": (
+                    "Keterangan hasil atau detail pekerjaan. "
+                    "Wajib diisi jika jam_selesai diisi. "
                     "Status/hasil pekerjaan, tanpa kata label (review/hasil/keterangan). "
                     "Boleh bracket [a/b/c/d] (contoh: [2/1/1/0]) atau teks biasa "
                     "(contoh: sudah selesai)"
@@ -142,6 +144,30 @@ CREATE_ALOKASI_TOOL = {
         "required": list(REQUIRED_FIELDS),
         "title": "CreateAlokasiArgs",
         "type": "object",
+    },
+}
+
+CHECK_PROJECT_TOOL = { #dari ihsan
+    "name": "check_project",
+    "description": (
+        "Memeriksa apakah suatu proyek terdaftar di MSA. "
+        "Gunakan untuk pertanyaan tentang keberadaan, ketersediaan, "
+        "atau status terdaftarnya proyek. Tidak membuat alokasi."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "nama_proyek": {
+                "type": "string",
+                "description": (
+                    "Nama proyek yang ingin diperiksa berdasarkan "
+                    "permintaan pengguna."
+                ),
+                "minLength": 1,
+            }
+        },
+        "required": ["nama_proyek"],
     },
 }
 
