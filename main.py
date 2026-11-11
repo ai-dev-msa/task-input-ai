@@ -433,7 +433,8 @@ def chat():
             projects=projects, 
             history=data.get("history") or [],
             user_id=user_id,
-            id_divisi = id_divisi
+            id_divisi = id_divisi,
+            lookup_alokasi=find_alokasi_by_params,
         )
         body = dict(envelope) #ini buat nampilin di response
         body["user_name"] = user_name #ini buat nampilin di response

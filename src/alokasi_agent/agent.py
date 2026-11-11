@@ -16,7 +16,8 @@ from alokasi_agent.schema import (
   OPTIONAL_FIELDS,
   validate_arguments, 
   CHECK_PROJECT_TOOL, 
-  CHECK_EMPLOYEE_TOOL
+  CHECK_EMPLOYEE_TOOL,
+  FIND_ALOKASI_TOOL
   )
 
 MAX_ROUNDS = 6
@@ -106,6 +107,32 @@ def _find_calls(message: dict[str, Any]) -> list[tuple[str, str, str]]:
         value = str(raw.get("name", "")) if isinstance(raw, dict) else ""
         found.append((tc.get("id", ""), function["name"], value.strip()))
     return found
+
+def _find_alokasi_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every find_alokasi tool call in the model's reply."""
+    return [
+        tc
+        for tc in message.get("tool_calls") or []
+        if (tc.get("function") or {}).get("name") == "find_alokasi"
+    ]
+
+
+def _lookup_alokasi_result(tc: dict[str, Any], lookup: Any) -> str:
+    """Tool result for one find_alokasi call: facts only, like _resolve_name."""
+    if lookup is None:
+        return "RESULT: lookup alokasi unavailable."
+    try:
+        args = json.loads((tc.get("function") or {}).get("arguments") or "")
+    except json.JSONDecodeError:
+        args = None
+    if not isinstance(args, dict):
+        return "RESULT: arguments unreadable."
+    rows = lookup(args)
+    if rows is None:
+        return "RESULT: lookup failed."
+    if not rows:
+        return "RESULT: 0 alokasi found."
+    return f"RESULT: {len(rows)} alokasi found: " + json.dumps(rows, ensure_ascii=False)
 
 
 def _validate_calls(calls: list[dict[str, Any]]) -> dict[str, list[str]]:
@@ -352,6 +379,7 @@ def run(
     id_divisi: str | None = None,
     now: datetime | None = None,
     complete: Any = None,
+    lookup_alokasi: Any = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Send one user message to the LLM and return (envelope dict, new history).
 
@@ -378,7 +406,8 @@ def run(
         CHECK_PROJECT_TOOL,
         CHECK_EMPLOYEE_TOOL,
         FIND_EMPLOYEE_TOOL,
-        FIND_PROJECT_TOOL
+        FIND_PROJECT_TOOL,
+        FIND_ALOKASI_TOOL,
     ])
     confirmed = _confirmed_rows(prior)
 
@@ -456,7 +485,8 @@ def run(
         #++++++ AKHIR CEK INTENT PENGECEKAN KARYAWAN
 
         finds = _find_calls(message)
-        if finds:
+        alokasi_finds = _find_alokasi_calls(message)
+        if finds or alokasi_finds:
             # Every tool call id in this turn gets a reply: find_* carries the
             # match result, a create_alokasi riding along gets "OK" and is only
             # acted on if the model sends it again in a later round.
@@ -466,6 +496,10 @@ def run(
                 )
                 for fid, tool, name in finds
             }
+            for tc in alokasi_finds:
+                results[tc.get("id", "")] = _lookup_alokasi_result(
+                    tc, lookup_alokasi
+                )
             messages = messages + [
                 {
                     "role": "assistant",

@@ -173,7 +173,7 @@ CHECK_PROJECT_TOOL = { #dari ihsan
 
 FIND_EMPLOYEE_DESCRIPTION = (
     "Cocokkan nama dengan daftar karyawan. Panggil untuk setiap nama_karyawan "
-    "sebelum create_alokasi; gunakan ejaan yang dikembalikan alat ini."
+    "sebelum create_alokasi atau find_alokasi; gunakan ejaan yang dikembalikan alat ini."
 )
 
 FIND_EMPLOYEE_TOOL = {
@@ -199,7 +199,7 @@ FIND_PROJECT_TOOL = {
     "name": "find_project",
     "description": (
         "Cocokkan nama proyek dengan daftar proyek. Panggil untuk setiap nama_proyek "
-        "sebelum create_alokasi. Kirim nama proyek selengkap yang ditulis user, "
+        "sebelum create_alokasi atau find_alokasi. Kirim nama proyek selengkap yang ditulis user, "
         "jangan dipotong atau disingkat. Gunakan ejaan yang dikembalikan alat ini. "
         "Jika hasilnya berisi beberapa kandidat, tanyakan ke user yang mana."
     ),
@@ -218,6 +218,65 @@ FIND_PROJECT_TOOL = {
         },
         "required": ["name"],
         "title": "FindProjectArgs",
+        "type": "object",
+    },
+}
+
+FIND_ALOKASI_TOOL = {
+    "name": "find_alokasi",
+    "description": (
+        "Cari alokasi kerja yang sudah ada, untuk diubah. Wajib: nama_alokasi, "
+        "tanggal, jenis_pekerjaan, dan TEPAT SATU dari nama_proyek atau "
+        "kode_proyek (jangan keduanya). Panggil find_employee dan find_project "
+        "lebih dulu. Hasilnya berisi id_edit untuk update_alokasi."
+    ),
+    "input_schema": {
+        "additionalProperties": False,
+        "properties": {
+            "nama_alokasi": {
+                "description": (
+                    "Nama karyawan pemilik alokasi, sesuai hasil find_employee"
+                ),
+                "minLength": 1,
+                "title": "Nama Alokasi",
+                "type": "string",
+            },
+            "tanggal": {
+                "description": "Tanggal alokasi YYYY-MM-DD, contoh: 2026-11-10",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "title": "Tanggal",
+                "type": "string",
+            },
+            "jenis_pekerjaan": {
+                "description": (
+                    "Uraian pekerjaan alokasi yang dicari, boleh sebagian "
+                    "kata, contoh: development endpoint"
+                ),
+                "minLength": 1,
+                "title": "Jenis Pekerjaan",
+                "type": "string",
+            },
+            "nama_proyek": {
+                "description": (
+                    "Nama proyek lengkap sesuai hasil find_project. "
+                    "Isi ini ATAU kode_proyek, jangan keduanya."
+                ),
+                "minLength": 1,
+                "title": "Nama Proyek",
+                "type": "string",
+            },
+            "kode_proyek": {
+                "description": (
+                    "Kode proyek, hanya jika user menulis kodenya. "
+                    "Isi ini ATAU nama_proyek, jangan keduanya."
+                ),
+                "minLength": 1,
+                "title": "Kode Proyek",
+                "type": "string",
+            },
+        },
+        "required": ["nama_alokasi", "tanggal", "jenis_pekerjaan"],
+        "title": "FindAlokasiArgs",
         "type": "object",
     },
 }
