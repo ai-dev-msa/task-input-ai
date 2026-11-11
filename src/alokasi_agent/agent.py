@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import json, re
 import difflib
 from collections.abc import Sequence
 from datetime import datetime, timezone
@@ -17,7 +17,9 @@ from alokasi_agent.schema import (
   validate_arguments, 
   CHECK_PROJECT_TOOL, 
   CHECK_EMPLOYEE_TOOL,
-  FIND_ALOKASI_TOOL
+  FIND_ALOKASI_TOOL,
+  UPDATE_ALOKASI_TOOL,
+  validate_update_arguments
   )
 
 MAX_ROUNDS = 6
@@ -115,6 +117,27 @@ def _find_alokasi_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         for tc in message.get("tool_calls") or []
         if (tc.get("function") or {}).get("name") == "find_alokasi"
     ]
+
+_ID_IN_TEXT = re.compile(r"\bID\s+([^\s|]+)")
+
+
+def _update_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every update_alokasi tool call in the model's reply."""
+    return [
+        tc
+        for tc in message.get("tool_calls") or []
+        if (tc.get("function") or {}).get("name") == "update_alokasi"
+    ]
+
+
+def _confirmed_update_ids(history: Sequence[dict[str, Any]]) -> set[str]:
+    """ids shown in the last assistant message, only if it was an update
+    confirmation line (contains 'Ubah:'). Empty set = nothing was confirmed."""
+    for turn in reversed(history):
+        if turn.get("role") == "assistant":
+            text = turn.get("content") or ""
+            return set(_ID_IN_TEXT.findall(text)) if "Ubah:" in text else set()
+    return set()
 
 
 def _lookup_alokasi_result(tc: dict[str, Any], lookup: Any) -> str:
@@ -408,8 +431,10 @@ def run(
         FIND_EMPLOYEE_TOOL,
         FIND_PROJECT_TOOL,
         FIND_ALOKASI_TOOL,
+        UPDATE_ALOKASI_TOOL
     ])
     confirmed = _confirmed_rows(prior)
+    confirmed_ids = _confirmed_update_ids(prior)
 
     validation_retries = 0
     redirects = 0
@@ -516,6 +541,67 @@ def run(
                 ],
             ]
             continue
+
+        updates = _update_calls(message)
+        if updates:
+            if len(updates) > 1:
+                refuse_reason = (
+                    "Hanya satu alokasi yang bisa diubah per permintaan. "
+                    "Tidak ada data yang dikirim."
+                )
+                break
+            tc = updates[0]
+            arguments = tc["function"].get("arguments", "")
+            errors = validate_update_arguments(arguments)
+            if errors:
+                if validation_retries >= 1:
+                    refuse_reason = (
+                        "Data ubahan tidak valid setelah dicoba ulang: "
+                        + "; ".join(errors)
+                    )
+                    break
+                validation_retries += 1
+                messages = messages + [
+                    {
+                        "role": "assistant",
+                        "content": message.get("content"),
+                        "tool_calls": message.get("tool_calls"),
+                    },
+                    *[
+                        {
+                            "role": "tool",
+                            "tool_call_id": c.get("id", ""),
+                            "content": "\n".join(errors)
+                            if c.get("id", "") == tc.get("id", "")
+                            else "OK",
+                        }
+                        for c in message.get("tool_calls") or []
+                    ],
+                ]
+                continue
+            if json.loads(arguments)["id_edit"].strip() not in confirmed_ids:
+                refuse_reason = (
+                    "Ubahan belum dikonfirmasi atau ID alokasi tidak dikenali. "
+                    "Cari ulang alokasinya. Tidak ada data yang dikirim."
+                )
+                break
+            envelope = {
+                "success": True,
+                "type": "function_call",
+                "function_name": "update_alokasi",
+                "arguments": arguments,
+                "raw_message": raw_message,
+                "user_id": user_id,
+                "reply": message.get("content"),
+            }
+            history_content = message.get("content") or ""
+            new_history = [
+                *prior,
+                {"role": "user", "content": raw_message},
+                {"role": "assistant", "content": history_content},
+            ]
+            envelope["history"] = new_history
+            return envelope, new_history
 
         calls = _alokasi_calls(message)
         errors_by_id = _validate_calls(calls)
