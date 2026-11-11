@@ -307,6 +307,23 @@ def check_employee_by_name(nama_karyawan):
         )
         return None
 
+def _slim_alokasi_row(row): #schema.py uses HH:MM, HH:MM:SS is rejected
+    """Ambil hanya field yang dibutuhkan model; jam dipotong jadi HH:MM."""
+
+    def hhmm(value):
+        return str(value)[:5] if value else None
+
+    return {
+        "id_edit": row.get("id_edit"),
+        "nama": row.get("nama"),
+        "nama_proyek": row.get("nama_proyek"),
+        "tanggal": row.get("tanggal"),
+        "jam_mulai": hhmm(row.get("jam_mulai")),
+        "jam_selesai": hhmm(row.get("jam_selesai")),
+        "jenis_pekerjaan": row.get("jenis_pekerjaan"),
+        "keterangan": row.get("keterangan"),
+    }
+
 def find_alokasi_by_params(arguments):
     try:
         token = get_erp_token()
@@ -336,7 +353,7 @@ def find_alokasi_by_params(arguments):
         if not isinstance(rows, list):
             raise Exception("Format data alokasi MIS tidak sesuai")
 
-        return rows
+        return [_slim_alokasi_row(row) for row in rows if isinstance(row, dict)]
 
     except Exception as exc:
         print(
