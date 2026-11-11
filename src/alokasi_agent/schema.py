@@ -281,6 +281,56 @@ FIND_ALOKASI_TOOL = {
     },
 }
 
+UPDATE_FIELDS = ("jam_mulai", "jam_selesai", "jenis_pekerjaan", "keterangan")
+
+UPDATE_ALOKASI_TOOL = {
+    "name": "update_alokasi",
+    "description": (
+        "Ubah satu alokasi kerja yang sudah ada. Panggil hanya setelah user "
+        "mengonfirmasi baris ubahan. Wajib: id_edit dari hasil find_alokasi. "
+        "Kirim HANYA field yang diubah; field yang tidak dikirim tidak berubah. "
+        "Satu panggilan per alokasi."
+    ),
+    "input_schema": {
+        "additionalProperties": False,
+        "properties": {
+            "id_edit": {
+                "description": "ID alokasi dari hasil find_alokasi, contoh: J98BO65CQ3",
+                "minLength": 1,
+                "title": "ID Edit",
+                "type": "string",
+            },
+            "jam_mulai": {
+                "description": "Jam mulai baru HH:MM, contoh: 09:00",
+                "pattern": "^\\d{2}:\\d{2}$",
+                "title": "Jam Mulai",
+                "type": "string",
+            },
+            "jam_selesai": {
+                "description": "Jam selesai baru HH:MM, contoh: 13:00",
+                "pattern": "^\\d{2}:\\d{2}$",
+                "title": "Jam Selesai",
+                "type": "string",
+            },
+            "jenis_pekerjaan": {
+                "description": "Uraian pekerjaan baru",
+                "minLength": 1,
+                "title": "Jenis Pekerjaan",
+                "type": "string",
+            },
+            "keterangan": {
+                "description": "Keterangan hasil baru, aturan sama seperti create_alokasi",
+                "minLength": 1,
+                "title": "Keterangan",
+                "type": "string",
+            },
+        },
+        "required": ["id_edit"],
+        "title": "UpdateAlokasiArgs",
+        "type": "object",
+    },
+}
+
 CHECK_PROJECT_TOOL = { #dari ihsan
     "name": "check_project",
     "description": (
@@ -408,6 +458,62 @@ def validate_arguments(arguments: str) -> list[str]:
         errors.append(
             f"jam_selesai harus setelah jam_mulai, dapat "
             f"{args['jam_mulai']} - {args['jam_selesai']}"
+        )
+
+    return errors
+
+def validate_update_arguments(arguments: str) -> list[str]:
+    """Return every problem with update_alokasi arguments. [] means safe.
+
+    Order check only runs when both times are sent; when just one is sent,
+    the agent compares it with the row's current value (a later step).
+    """
+    if not isinstance(arguments, str):
+        return ["bukan JSON valid"]
+    try:
+        args: Any = json.loads(arguments)
+    except json.JSONDecodeError as exc:
+        return [f"bukan JSON valid ({exc})"]
+    if not isinstance(args, dict):
+        return ["harus berupa JSON object"]
+
+    errors: list[str] = []
+
+    id_edit = args.get("id_edit")
+    if not isinstance(id_edit, str) or not id_edit.strip():
+        errors.append("id_edit kosong atau tidak diisi")
+
+    for name in sorted(set(args) - {"id_edit"} - set(UPDATE_FIELDS)):
+        errors.append(f"{name} bukan argumen update_alokasi")
+
+    sent = [name for name in UPDATE_FIELDS if name in args]
+    if not sent:
+        errors.append("tidak ada field yang diubah")
+
+    for name in sent:
+        value = args[name]
+        if not isinstance(value, str) or not value.strip():
+            errors.append(
+                f"{name} harus teks tidak kosong; kirim hanya field yang diubah"
+            )
+
+    for name in ("jam_mulai", "jam_selesai"):
+        value = args.get(name)
+        if isinstance(value, str) and value.strip() and not _is_valid_time(value):
+            errors.append(
+                f"{name} harus HH:MM 24 jam (jam 00-23, menit 00-59), dapat {value!r}"
+            )
+
+    mulai, selesai = args.get("jam_mulai"), args.get("jam_selesai")
+    if (
+        isinstance(mulai, str)
+        and isinstance(selesai, str)
+        and _is_valid_time(mulai)
+        and _is_valid_time(selesai)
+        and _minutes(selesai) <= _minutes(mulai)
+    ):
+        errors.append(
+            f"jam_selesai harus setelah jam_mulai, dapat {mulai} - {selesai}"
         )
 
     return errors
