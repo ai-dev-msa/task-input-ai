@@ -8,7 +8,7 @@ from typing import Any
 
 from alokasi_agent.llm import complete as default_complete
 from alokasi_agent.llm import to_openai_tools
-from alokasi_agent.prompt import build_system_prompt, parse_summary
+from alokasi_agent.prompt import build_system_prompt, parse_summary, parse_update_summary
 from alokasi_agent.schema import (
   CREATE_ALOKASI_TOOL, 
   FIND_EMPLOYEE_TOOL,
@@ -19,7 +19,8 @@ from alokasi_agent.schema import (
   CHECK_EMPLOYEE_TOOL,
   FIND_ALOKASI_TOOL,
   UPDATE_ALOKASI_TOOL,
-  validate_update_arguments
+  validate_update_arguments,
+  times_in_order,
   )
 
 MAX_ROUNDS = 6
@@ -118,9 +119,6 @@ def _find_alokasi_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         if (tc.get("function") or {}).get("name") == "find_alokasi"
     ]
 
-_ID_IN_TEXT = re.compile(r"\bID\s+([^\s|]+)")
-
-
 def _update_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
     """Every update_alokasi tool call in the model's reply."""
     return [
@@ -129,16 +127,46 @@ def _update_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         if (tc.get("function") or {}).get("name") == "update_alokasi"
     ]
 
-
-def _confirmed_update_ids(history: Sequence[dict[str, Any]]) -> set[str]:
-    """ids shown in the last assistant message, only if it was an update
-    confirmation line (contains 'Ubah:'). Empty set = nothing was confirmed."""
+def _confirmed_update(history: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
+    """Parsed update confirmation from the last assistant message, or None."""
     for turn in reversed(history):
         if turn.get("role") == "assistant":
-            text = turn.get("content") or ""
-            return set(_ID_IN_TEXT.findall(text)) if "Ubah:" in text else set()
-    return set()
+            return parse_update_summary(turn.get("content"))
+    return None
 
+
+def _update_guard_errors(arguments: str, confirmed: dict[str, Any] | None) -> list[str]:
+    """Hard guards on a schema-valid update call. [] = it matches the confirmation."""
+    if confirmed is None:
+        return [
+            "Belum ada konfirmasi ubahan dari user. Tampilkan baris "
+            "ubahan (dengan Jam: dan Ubah:) lalu minta konfirmasi."
+        ]
+    args = json.loads(arguments)
+    errors: list[str] = []
+
+    if args["id_edit"].strip() != confirmed["id_edit"]:
+        errors.append(
+            f'id_edit {args["id_edit"]!r} berbeda dari konfirmasi '
+            f'({confirmed["id_edit"]})'
+        )
+
+    def clean(value: Any) -> str:
+        return str(value).strip().rstrip(".").strip()
+
+    sent = {key: clean(value) for key, value in args.items() if key != "id_edit"}
+    want = {key: clean(value) for key, value in confirmed["changes"].items()}
+    if sent != want:
+        errors.append(
+            "Isi ubahan berbeda dari konfirmasi. Konfirmasi: "
+            f"{json.dumps(want, ensure_ascii=False)}. Kirim ulang persis seperti itu."
+        )
+
+    mulai = sent.get("jam_mulai") or confirmed["jam_mulai"]
+    selesai = sent.get("jam_selesai") or confirmed["jam_selesai"]
+    if mulai and selesai and not times_in_order(mulai, selesai):
+        errors.append(f"jam_selesai harus setelah jam_mulai, dapat {mulai} - {selesai}")
+    return errors
 
 def _lookup_alokasi_result(tc: dict[str, Any], lookup: Any) -> str:
     """Tool result for one find_alokasi call: facts only, like _resolve_name."""
@@ -434,7 +462,7 @@ def run(
         UPDATE_ALOKASI_TOOL
     ])
     confirmed = _confirmed_rows(prior)
-    confirmed_ids = _confirmed_update_ids(prior)
+    confirmed_update = _confirmed_update(prior)
 
     validation_retries = 0
     redirects = 0
@@ -552,7 +580,9 @@ def run(
                 break
             tc = updates[0]
             arguments = tc["function"].get("arguments", "")
-            errors = validate_update_arguments(arguments)
+            errors = validate_update_arguments(arguments) or _update_guard_errors(
+                arguments, confirmed_update
+            )
             if errors:
                 if validation_retries >= 1:
                     refuse_reason = (
@@ -579,12 +609,6 @@ def run(
                     ],
                 ]
                 continue
-            if json.loads(arguments)["id_edit"].strip() not in confirmed_ids:
-                refuse_reason = (
-                    "Ubahan belum dikonfirmasi atau ID alokasi tidak dikenali. "
-                    "Cari ulang alokasinya. Tidak ada data yang dikirim."
-                )
-                break
             envelope = {
                 "success": True,
                 "type": "function_call",

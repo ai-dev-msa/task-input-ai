@@ -517,3 +517,9 @@ def validate_update_arguments(arguments: str) -> list[str]:
         )
 
     return errors
+
+def times_in_order(mulai: str, selesai: str) -> bool:
+    """True when selesai is later than mulai; malformed times are not judged here."""
+    if not (_is_valid_time(mulai) and _is_valid_time(selesai)):
+        return True
+    return _minutes(selesai) > _minutes(mulai)

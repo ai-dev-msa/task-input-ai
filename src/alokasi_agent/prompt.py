@@ -200,9 +200,9 @@ Anyone may edit anyone's allocation; do not check who owns the row.
    cannot be changed here.
 4. Show one confirmation line, then ask to confirm:
    ID <id_edit> | <nama> | <nama_proyek> | <tanggal> | <jenis_pekerjaan> |
-   Ubah: <field>: <old> -> <new>[; <field>: <old> -> <new>]. Benar?
-   Write the old value as "(kosong)" when the row has none. Always include
-   the ID: it is the only way to remember which row is being edited.
+   Jam: <jam_mulai>-<jam_selesai> | Ubah: <field>: <old> -> <new>[; <field>: <old> -> <new>]. Benar?
+   Write "(kosong)" when jam_selesai or an old value is empty. Always include
+   the ID and the Jam part: they are the only way to remember the row.
 5. If the user edits the request, update the line and ask again. If the
    user cancels, one short line.
 6. jam_selesai must stay later than jam_mulai, using the row's current
@@ -611,3 +611,38 @@ def parse_summary(reply: str | None) -> list[dict[str, str | int]]:
                         row["keterangan"] = part
         rows.append(row)
     return rows
+
+_JAM = re.compile(r"^Jam:\s*(\d{2}:\d{2})-(\d{2}:\d{2}|\(kosong\))$")
+_CHANGE = re.compile(
+    r"(jam_mulai|jam_selesai|jenis_pekerjaan|keterangan):\s*(.*?)\s*->\s*(.*?)"
+    r"(?=;\s*(?:jam_mulai|jam_selesai|jenis_pekerjaan|keterangan):|$)"
+)
+
+
+def parse_update_summary(reply: str | None) -> dict[str, Any] | None:
+    """Parsed update confirmation line from a reply, or None.
+
+    Shape: ID x | nama | proyek | tanggal | jenis | Jam: a-b | Ubah: f: old -> new; ...
+    """
+    for line in reversed((reply or "").splitlines()):
+        if "Ubah:" not in line:
+            continue
+        parts = [part.strip() for part in line.split("|")]
+        if not parts[0].startswith("ID "):
+            continue
+        id_edit = parts[0][3:].strip()
+        jam = next((m for p in parts if (m := _JAM.match(p))), None)
+        start = next((i for i, p in enumerate(parts) if p.startswith("Ubah:")), None)
+        if not id_edit or jam is None or start is None:
+            return None
+        tail = _clean_last_part("|".join(parts[start:])[len("Ubah:"):])
+        changes = {m.group(1): m.group(3).strip() for m in _CHANGE.finditer(tail)}
+        if not changes:
+            return None
+        return {
+            "id_edit": id_edit,
+            "jam_mulai": jam.group(1),
+            "jam_selesai": None if jam.group(2) == "(kosong)" else jam.group(2),
+            "changes": changes,
+        }
+    return None

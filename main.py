@@ -530,54 +530,85 @@ def chat():
 
                 return jsonify(body)
 
-            #for finding alokasi
-            if body.get("function_name") == "find_alokasi":
+            # #for finding alokasi
+            # if body.get("function_name") == "find_alokasi":
+            #     arguments = json.loads(body.get("arguments") or "{}")
+            #     hasil = find_alokasi_by_params(arguments)
+
+            #     if hasil is None:
+            #         body["success"] = False
+            #         reply = "Pengecekan alokasi gagal. Silakan coba lagi"
+            #     elif hasil:
+            #         body["success"] = True
+            #         daftar = "\n".join(
+            #             f'- RecID {r.get("RecID")} | {r.get("Tanggal")} | {r.get("Nama Alokasi")} | {r.get("Jenis Pekerjaan")}'
+            #             for r in hasil
+            #         )
+            #         reply = f"Alokasi ditemukan: \n{daftar}"
+            #     else:
+            #         body["success"] = True
+            #         reply = "Alokasi tidak ditemukan"
+
+            #     body["type"] = "text"
+            #     body["function_name"] = ""
+            #     body["arguments"] = ""
+            #     body["reply"] = reply
+
+            #     body["history"] = [
+            #         *(data.get("history") or []),
+            #         {"role": "user", "content": user_message},
+            #         {"role": "assistant", "content": reply},
+            #     ]
+            #     return jsonify(body)
+
+            #for updating alokasi
+            if body.get("function_name") == "update_alokasi":
                 arguments = json.loads(body.get("arguments") or "{}")
-                hasil = find_alokasi_by_params(arguments)
+                changed = [key for key in arguments if key != "id_edit"]
 
-                if hasil is None:
-                    body["success"] = False
-                    reply = "Pengecekan alokasi gagal. Silakan coba lagi"
-                elif hasil:
-                    body["success"] = True
-                    daftar = "\n".join(
-                        f'- RecID {r.get("RecID")} | {r.get("Tanggal")} | {r.get("Nama Alokasi")} | {r.get("Jenis Pekerjaan")}'
-                        for r in hasil
+                try:
+                    token = get_erp_token()
+                    response_ci3 = requests.post(
+                        "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/updateAlokasi",
+                        json=arguments,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json"
+                        },
+                        timeout=30
                     )
-                    reply = f"Alokasi ditemukan: \n{daftar}"
-                else:
-                    body["success"] = True
-                    reply = "Alokasi tidak ditemukan"
+                    print("CI3 UPDATE STATUS:", response_ci3.status_code)
+                    print("CI3 UPDATE RESPONSE:", response_ci3.text)
 
+                    hasil_ci3 = response_ci3.json()
+                    ok = response_ci3.status_code == 200 and (
+                        not isinstance(hasil_ci3, dict)
+                        or hasil_ci3.get("success") is not False
+                    )
+                except Exception as exc:
+                    print("update_alokasi gagal:", repr(exc), flush=True)
+                    hasil_ci3 = None
+                    ok = False
+
+                if ok:
+                    reply = (
+                        f"Alokasi {arguments.get('id_edit')} berhasil diubah "
+                        f"({', '.join(changed)})."
+                    )
+                else:
+                    reply = "Perubahan alokasi gagal disimpan di MIS. Silakan coba lagi."
+
+                body["success"] = ok
                 body["type"] = "text"
                 body["function_name"] = ""
                 body["arguments"] = ""
                 body["reply"] = reply
-
+                body["hasil_ci3"] = hasil_ci3
                 body["history"] = [
                     *(data.get("history") or []),
                     {"role": "user", "content": user_message},
                     {"role": "assistant", "content": reply},
                 ]
-                return jsonify(body)
-
-            #for updating alokasi
-            if body.get("function_name") == "update_alokasi":
-                arguments = json.loads(body.get("arguments") or "{}")
-                token = get_erp_token()
-                response_ci3 = requests.post(
-                    "https://appweb.mitrasinergi.co.id/msa/apiv1/aialokasiharian/updateAlokasi",
-                    json=arguments,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json"
-                    },
-                    timeout=30
-                )
-                print("CI3 UPDATE STATUS:", response_ci3.status_code)
-                print("CI3 UPDATE RESPONSE:", response_ci3.text)
-
-                body["hasil_ci3"] = response_ci3.json()
                 return jsonify(body)
 
             #++VVVVVV CREATE ALOKASI (KODE LAMA)
