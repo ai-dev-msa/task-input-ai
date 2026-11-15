@@ -1,3 +1,4 @@
+#developed by ans x imx x vibecode methods, wkwk
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
