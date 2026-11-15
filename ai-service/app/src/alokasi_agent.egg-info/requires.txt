@@ -1,0 +1,7 @@
+pydantic<3,>=2.7
+openai<4,>=1.40
+tzdata>=2024.1
+python-dotenv>=1.0
+
+[dev]
+pytest>=8
