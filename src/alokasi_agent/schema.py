@@ -24,6 +24,7 @@ OPTIONAL_FIELDS = (
     "jobdesc",
     "planning",
     "kategori_pekerjaan",
+    "plan_qty",
 )
 
 CREATE_ALOKASI_DESCRIPTION = (
@@ -430,8 +431,11 @@ def validate_arguments(arguments: str) -> list[str]:
     for name in OPTIONAL_FIELDS:
         value = args.get(name)
         if value is None or (isinstance(value, str) and not value.strip()):
-            continue  # None or blank means "not provided"
-        if not isinstance(value, str):
+            continue
+        if name == "plan_qty":
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                errors.append("plan_qty harus bilangan bulat >= 1")
+        elif not isinstance(value, str):
             errors.append(f"{name} harus berupa teks")
 
     tanggal = args.get("tanggal")

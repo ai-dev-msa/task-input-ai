@@ -74,28 +74,6 @@ def _employee_check_calls( #cek keberadaan karyawan
         if (tc.get("function") or {}).get("name") == "check_employee"
     ]
 
-def _project_check_calls( #cek keberadaan proyek
-    message: dict[str, Any]
-) -> list[dict[str, Any]]:
-    """Ambil tool call khusus pengecekan keberadaan proyek."""
-    calls = message.get("tool_calls") or []
-    return [
-        tc
-        for tc in calls
-        if (tc.get("function") or {}).get("name") == "check_project"
-    ]
-
-def _employee_check_calls( #cek keberadaan karyawan
-    message: dict[str, Any]
-) -> list[dict[str, Any]]:
-    """Ambil tool call khusus pengecekan keberadaan karyawan."""
-    calls = message.get("tool_calls") or []
-    return [
-        tc
-        for tc in calls
-        if (tc.get("function") or {}).get("name") == "check_employee"
-    ]
-
 def _find_calls(message: dict[str, Any]) -> list[tuple[str, str, str]]:
     """(tool_call id, function name, name) for every find_* call in the reply."""
     found: list[tuple[str, str, str]] = []
