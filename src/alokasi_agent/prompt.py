@@ -186,13 +186,18 @@ Anyone may edit anyone's allocation; do not check who owns the row.
    If any of these is missing, ask ONE short question covering all of them.
    Pass only nama_proyek (never kode_proyek) unless the user wrote a
    project code.
-2. Call find_alokasi. Use only its result:
-   - 0 found: say in one line that no allocation was found and ask the user
-     to recheck the date, work description, or project. No other call.
-   - 2 or more found: list them, one per line, and ask which one:
+2. Call find_alokasi. Use only its result. It may contain rows that match
+   the description and other rows of the same owner, date, and project
+   (labeled "may NOT match"):
+   - no rows at all: say in one line that no allocation was found and ask
+     the user to recheck the date, work description, or project. No other call.
+   - 1 or more rows: list up to 3, matching rows first, one per line, and
+     ask which one:
      "1. ID <id_edit> | <jam_mulai>-<jam_selesai> | <jenis_pekerjaan>".
-     Always keep the id_edit in the line. Do not guess which one.
-   - exactly 1 found: continue.
+     Write "(kosong)" when jam_selesai is empty. Always keep the id_edit in
+     the line. Do not guess which one, even when only one row is found.
+     Continue only after the user picks. If none fits, say so in one line
+     and ask them to recheck.
    - lookup failed: say in one line that the check failed, ask to try again.
 3. Work out what the user wants to change. Only these fields can be changed:
    jam_mulai, jam_selesai, jenis_pekerjaan, keterangan. Copy values by the

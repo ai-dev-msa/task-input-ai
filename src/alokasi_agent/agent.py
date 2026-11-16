@@ -146,6 +146,10 @@ def _update_guard_errors(arguments: str, confirmed: dict[str, Any] | None) -> li
         errors.append(f"jam_selesai harus setelah jam_mulai, dapat {mulai} - {selesai}")
     return errors
 
+TOP_ROWS = 3
+
+TOP_ROWS = 3
+
 def _lookup_alokasi_result(tc: dict[str, Any], lookup: Any) -> str:
     """Tool result for one find_alokasi call: facts only, like _resolve_name."""
     if lookup is None:
@@ -159,9 +163,29 @@ def _lookup_alokasi_result(tc: dict[str, Any], lookup: Any) -> str:
     rows = lookup(args)
     if rows is None:
         return "RESULT: lookup failed."
-    if not rows:
+
+    matched = rows[:TOP_ROWS]
+    extra: list[dict[str, Any]] = []
+    if len(matched) < TOP_ROWS:
+        # Same owner/date/project, without the jenis_pekerjaan filter.
+        # If this lookup fails (None), we silently keep just the matches.
+        wider = lookup({k: v for k, v in args.items() if k != "jenis_pekerjaan"})
+        seen = {r.get("id_edit") for r in matched}
+        extra = [r for r in (wider or []) if r.get("id_edit") not in seen]
+        extra = extra[: TOP_ROWS - len(matched)]
+
+    if not matched and not extra:
         return "RESULT: 0 alokasi found."
-    return f"RESULT: {len(rows)} alokasi found: " + json.dumps(rows, ensure_ascii=False)
+    text = f"RESULT: {len(rows)} alokasi match the description: " + json.dumps(
+        matched, ensure_ascii=False
+    )
+    if extra:
+        text += (
+            ". Other alokasi of the same owner, date, and project "
+            "(may NOT match the description): "
+            + json.dumps(extra, ensure_ascii=False)
+        )
+    return text
 
 
 def _validate_calls(calls: list[dict[str, Any]]) -> dict[str, list[str]]:
