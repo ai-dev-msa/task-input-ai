@@ -148,8 +148,6 @@ def _update_guard_errors(arguments: str, confirmed: dict[str, Any] | None) -> li
 
 TOP_ROWS = 3
 
-TOP_ROWS = 3
-
 def _lookup_alokasi_result(tc: dict[str, Any], lookup: Any) -> str:
     """Tool result for one find_alokasi call: facts only, like _resolve_name."""
     if lookup is None:
