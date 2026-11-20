@@ -112,6 +112,17 @@ def _confirmed_update(history: Sequence[dict[str, Any]]) -> dict[str, Any] | Non
             return parse_update_summary(turn.get("content"))
     return None
 
+_LISTED_ID = re.compile(r"ID\s+(\S+)\s*\|")
+
+
+def _listed_ids(history: Sequence[dict[str, Any]]) -> set[str]:
+    """id_edit values the assistant has already shown in this conversation."""
+    ids: set[str] = set()
+    for turn in history:
+        if turn.get("role") == "assistant":
+            ids.update(_LISTED_ID.findall(turn.get("content") or ""))
+    return ids
+
 
 def _update_guard_errors(arguments: str, confirmed: dict[str, Any] | None) -> list[str]:
     """Hard guards on a schema-valid update call. [] = it matches the confirmation."""
@@ -127,6 +138,11 @@ def _update_guard_errors(arguments: str, confirmed: dict[str, Any] | None) -> li
         errors.append(
             f'id_edit {args["id_edit"]!r} berbeda dari konfirmasi '
             f'({confirmed["id_edit"]})'
+        )
+
+    if args["id_edit"].strip() not in listed_ids:
+        errors.append(
+            f'id_edit {args["id_edit"]!r} tidak pernah ditampilkan dari hasil pencarian'
         )
 
     def clean(value: Any) -> str:
@@ -148,6 +164,11 @@ def _update_guard_errors(arguments: str, confirmed: dict[str, Any] | None) -> li
 
 TOP_ROWS = 3
 
+def _hhmm(value: Any) -> str:
+    """MIS sends '08:30:00'; the confirmation line and parser use 'HH:MM'."""
+    text = str(value or "").strip()
+    return text[:5] if re.fullmatch(r"\d{2}:\d{2}(:\d{2})?", text) else text
+
 def _lookup_alokasi_result(tc: dict[str, Any], lookup: Any) -> str:
     """Tool result for one find_alokasi call: facts only, like _resolve_name."""
     if lookup is None:
@@ -164,6 +185,11 @@ def _lookup_alokasi_result(tc: dict[str, Any], lookup: Any) -> str:
     rows = lookup({k: v for k, v in args.items() if k != "jenis_pekerjaan"})
     if rows is None:
         return "RESULT: lookup failed."
+
+    rows = [
+    {**r, "jam_mulai": _hhmm(r.get("jam_mulai")), "jam_selesai": _hhmm(r.get("jam_selesai"))}
+    for r in rows
+    ]
 
     needle = str(args.get("jenis_pekerjaan") or "").strip().casefold()
     hits = [
@@ -466,6 +492,7 @@ def run(
     ])
     confirmed = _confirmed_rows(prior)
     confirmed_update = _confirmed_update(prior)
+    listed_ids = _listed_ids(prior)
 
     validation_retries = 0
     redirects = 0
@@ -584,7 +611,7 @@ def run(
             tc = updates[0]
             arguments = tc["function"].get("arguments", "")
             errors = validate_update_arguments(arguments) or _update_guard_errors(
-                arguments, confirmed_update
+                arguments, confirmed_update, listed_ids
             )
             if errors:
                 if validation_retries >= 1:
