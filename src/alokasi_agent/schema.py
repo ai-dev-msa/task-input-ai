@@ -332,30 +332,6 @@ UPDATE_ALOKASI_TOOL = {
     },
 }
 
-CHECK_PROJECT_TOOL = { #dari ihsan
-    "name": "check_project",
-    "description": (
-        "Memeriksa apakah suatu proyek terdaftar di MSA. "
-        "Gunakan untuk pertanyaan tentang keberadaan, ketersediaan, "
-        "atau status terdaftarnya proyek. Tidak membuat alokasi."
-    ),
-    "input_schema": {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "nama_proyek": {
-                "type": "string",
-                "description": (
-                    "Nama proyek yang ingin diperiksa berdasarkan "
-                    "permintaan pengguna."
-                ),
-                "minLength": 1,
-            }
-        },
-        "required": ["nama_proyek"],
-    },
-}
-
 CHECK_EMPLOYEE_TOOL = { #dari ihsan
     "name": "check_employee",
     "description": (

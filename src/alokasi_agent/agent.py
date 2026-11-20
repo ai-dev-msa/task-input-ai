@@ -158,23 +158,26 @@ def _lookup_alokasi_result(tc: dict[str, Any], lookup: Any) -> str:
         args = None
     if not isinstance(args, dict):
         return "RESULT: arguments unreadable."
-    rows = lookup(args)
+
+    # One MIS call only: id_edit changes on every call, so ids from two
+    # calls must never be mixed. Split into hits / others in Python.
+    rows = lookup({k: v for k, v in args.items() if k != "jenis_pekerjaan"})
     if rows is None:
         return "RESULT: lookup failed."
 
-    matched = rows[:TOP_ROWS]
-    extra: list[dict[str, Any]] = []
-    if len(matched) < TOP_ROWS:
-        # Same owner/date/project, without the jenis_pekerjaan filter.
-        # If this lookup fails (None), we silently keep just the matches.
-        wider = lookup({k: v for k, v in args.items() if k != "jenis_pekerjaan"})
-        seen = {r.get("id_edit") for r in matched}
-        extra = [r for r in (wider or []) if r.get("id_edit") not in seen]
-        extra = extra[: TOP_ROWS - len(matched)]
+    needle = str(args.get("jenis_pekerjaan") or "").strip().casefold()
+    hits = [
+        r for r in rows
+        if needle in str(r.get("jenis_pekerjaan") or "").casefold()
+    ]
+    others = [r for r in rows if r not in hits]
+
+    matched = hits[:TOP_ROWS]
+    extra = others[: TOP_ROWS - len(matched)]
 
     if not matched and not extra:
         return "RESULT: 0 alokasi found."
-    text = f"RESULT: {len(rows)} alokasi match the description: " + json.dumps(
+    text = f"RESULT: {len(hits)} alokasi match the description: " + json.dumps(
         matched, ensure_ascii=False
     )
     if extra:
@@ -377,7 +380,7 @@ def _canonicalize_row(
     return raw if not changed else json.dumps(args, separators=(",", ":"))
 
 
-def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str | int]]:
+def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str ]]:
     """Structured rows from the pending confirmation summary, or [].
 
     The last assistant turn is the summary the user is confirming; prompt's
@@ -391,7 +394,7 @@ def _confirmed_rows(history: Sequence[dict[str, Any]]) -> list[dict[str, str | i
     return []
 
 
-def _same_rows(calls: list[dict[str, Any]], confirmed: list[dict[str, str | int]]) -> bool:
+def _same_rows(calls: list[dict[str, Any]], confirmed: list[dict[str, str ]]) -> bool:
     """True when the model's calls are exactly the confirmed rows (any order).
 
     Null values count as absent: a call sending "keterangan": null matches a
@@ -462,7 +465,7 @@ def run(
         UPDATE_ALOKASI_TOOL
     ])
     confirmed = _confirmed_rows(prior)
-    confirmed_update = _confirmed_update(prior)
+    confirmed_update = _confirmed_update
 
     validation_retries = 0
     redirects = 0
@@ -747,10 +750,22 @@ def run(
         # Accept: one row keeps the model's object string (PRD sample shape
         # unchanged); several rows become a JSON array string (FR-08). Names
         # are rewritten to the exact list spellings first.
+        #++VVVVVV DEBUG KATEGORI DARI AI
+        for tc in calls:
+            print(
+                "AI CREATE ALOKASI RAW:",
+                tc["function"].get("arguments"),
+                flush=True
+            )
+        #//++VVVVVV
         rows = [
             _canonicalize_row(tc["function"]["arguments"], employees, projects)
             for tc in calls
         ]
+        #++VVVVVV DEBUG ROW FINAL
+        for row in rows:
+            print("AI CREATE ALOKASI FINAL:", row, flush=True)
+        #//++VVVVVV
         arguments = (
             rows[0] if len(rows) == 1 else json.dumps([json.loads(row) for row in rows])
         )

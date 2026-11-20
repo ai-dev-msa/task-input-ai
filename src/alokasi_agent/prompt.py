@@ -201,8 +201,8 @@ Anyone may edit anyone's allocation; do not check who owns the row.
    - lookup failed: say in one line that the check failed, ask to try again.
 3. Work out what the user wants to change. If the user has not said which
    field or what the new value is, show the row details first, then ask
-   the question on its OWN NEW LINE (blank line before it, never on the
-   same line as the row):
+   the question. Ensure it's easy to read for user, better if it's on a new line 
+   or use period (.) after the summary line :
    "Mau diubah apa? (jam mulai, jam selesai, jenis pekerjaan, atau keterangan)"
    Do not guess a field. Only these fields can be changed: ...
 4. Show one confirmation line, then ask to confirm:
