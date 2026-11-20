@@ -465,7 +465,7 @@ def run(
         UPDATE_ALOKASI_TOOL
     ])
     confirmed = _confirmed_rows(prior)
-    confirmed_update = _confirmed_update
+    confirmed_update = _confirmed_update(prior)
 
     validation_retries = 0
     redirects = 0
