@@ -109,7 +109,13 @@ class AlokasiController:
                 )
 
             # controller membungkus response MIS: data.data = daftar baris
-            rows = (hasil.get("data") or {}).get("data", [])
+            mis = hasil.get("data")
+            if isinstance(mis, dict):
+                rows = mis.get("data") or []
+            elif isinstance(mis, list):
+                rows = mis
+            else:
+                rows = []
 
             if not isinstance(rows, list):
                 raise Exception("Format data alokasi MIS tidak sesuai")
@@ -121,6 +127,8 @@ class AlokasiController:
             ]
 
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             print("find_alokasi_by_params gagal:", repr(exc), flush=True)
             return None
 

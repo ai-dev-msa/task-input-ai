@@ -124,7 +124,7 @@ def _listed_ids(history: Sequence[dict[str, Any]]) -> set[str]:
     return ids
 
 
-def _update_guard_errors(arguments: str, confirmed: dict[str, Any] | None) -> list[str]:
+def _update_guard_errors(arguments: str, confirmed: dict[str, Any] | None, listed_ids: set[str]) -> list[str]:
     """Hard guards on a schema-valid update call. [] = it matches the confirmation."""
     if confirmed is None:
         return [
