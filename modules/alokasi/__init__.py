@@ -1,0 +1,1 @@
+from .routes import alokasi_bp
